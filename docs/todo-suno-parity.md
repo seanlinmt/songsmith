@@ -25,28 +25,28 @@ Ordered by impact; each item names the Suno mechanism it mirrors.
 
 ## Medium impact
 
-- [ ] **Curated style list + saved styles** — Suno exposes
+- [x] **Curated style list + saved styles** — Suno exposes
   `generate/get_recommend_styles/` (curated suggestions) and `prompts/v2`
   (persisted user styles). Add a static recommended-styles list to
   `/api/config`, and a `styles` table in SQLite so users can save/reuse styles.
-- [ ] **Generation-control knobs** — Suno's `CreatePromptForm` exposes style
+- [x] **Generation-control knobs** — Suno's `CreatePromptForm` exposes style
   influence, weirdness, audio influence, variety, and vocal gender. Map these
   to ACE-Step parameters where supported (seed, CFG/guidance, steps) and expose
   vocal gender in the prompt (e.g. "male vocals"/"female vocals").
-- [ ] **Align extend with Suno's continue semantics** — Suno uses
+- [x] **Align extend with Suno's continue semantics** — Suno uses
   `continue_clip_id` + `continue_at` and infill windows
   (`infill_start_s`/`infill_end_s`) for partial regeneration. Keep the existing
   extend endpoint but adopt the naming and plan partial-window regeneration.
-- [ ] **Status vocabulary parity** — use Suno's clip status lifecycle
+- [x] **Status vocabulary parity** — use Suno's clip status lifecycle
   (`submitted` → `queued` → `streaming` → `complete` / `error`) in job/queue
   events so client polling mirrors Suno's.
 
 ## Low impact / later
 
-- [ ] **Word-level lyric timing** — Suno serves `aligned_lyrics/v2`
+- [x] **Word-level lyric timing** — Suno serves `aligned_lyrics/v2`
   (per-word timestamps). If ACE-Step can emit timestamps, add karaoke-style
   display; otherwise approximate per-line timing.
-- [ ] **Iterative lyric projects** — mirror `lyrics-projects` +
+- [x] **Iterative lyric projects** — mirror `lyrics-projects` +
   `flush`: allow editing lyrics and re-flushing to the music model without
   regenerating from scratch.
 - [ ] **Multi-size media handling** — Suno clips carry `media_urls[{url,
