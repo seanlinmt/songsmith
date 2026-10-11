@@ -138,9 +138,37 @@ function setTab(tab) {
 /* ============================================================
    CREATE view
    ============================================================ */
+/* ---------- duration slider mapping (raw 0..1000 -> seconds) ----------
+   Anchors [15, 30, 60, 120, 240] sit at raw positions [0, 250, 500, 750, 1000],
+   each segment interpolating linearly, so the slider thumb tracks the
+   evenly-spaced tick marks exactly. */
+const DURATION_ANCHORS = [15, 30, 60, 120, 240];
+const DURATION_RAW_STEP = 250; // raw distance between anchors
+
+function durationFor(raw) {
+  const clamped = Math.min(1000, Math.max(0, raw));
+  const seg = Math.min(DURATION_ANCHORS.length - 2, Math.floor(clamped / DURATION_RAW_STEP));
+  const t = (clamped - seg * DURATION_RAW_STEP) / DURATION_RAW_STEP;
+  const d = DURATION_ANCHORS[seg] + t * (DURATION_ANCHORS[seg + 1] - DURATION_ANCHORS[seg]);
+  return Math.round(d / 5) * 5; // 5s granularity for display/API
+}
+
+function rawFor(duration) {
+  const d = Math.min(240, Math.max(15, duration));
+  let seg = DURATION_ANCHORS.length - 2;
+  for (let i = 0; i < DURATION_ANCHORS.length - 1; i++) {
+    if (d >= DURATION_ANCHORS[i] && d <= DURATION_ANCHORS[i + 1]) { seg = i; break; }
+  }
+  const t = (d - DURATION_ANCHORS[seg]) / (DURATION_ANCHORS[seg + 1] - DURATION_ANCHORS[seg]);
+  return Math.round(seg * DURATION_RAW_STEP + t * DURATION_RAW_STEP);
+}
+
 function renderCreate() {
   const f = state.form;
-  const fill = ((f.duration - 15) / (240 - 15)).toFixed(4);
+  /* Duration slider operates on a raw 0..1000 scale mapped piecewise-linearly
+     onto anchors [15, 30, 60, 120, 240] at raw positions [0, 250, 500, 750, 1000],
+     so the thumb lines up with the evenly-spaced tick marks. */
+  const fill = (rawFor(f.duration) / 1000).toFixed(4);
   $("#view-create").innerHTML = `
     <div class="view-head">
       <h1>Create a song</h1>
@@ -192,7 +220,7 @@ function renderCreate() {
         <div class="control-block duration-block">
           <span class="field-label">Duration <span class="duration-value" id="duration-value">${f.duration}s</span></span>
           <div class="slider-wrap">
-            <input type="range" id="duration-slider" class="slider" min="15" max="240" step="5" value="${f.duration}" style="--fill:${fill}">
+            <input type="range" id="duration-slider" class="slider" min="0" max="1000" step="25" value="${rawFor(f.duration)}" style="--fill:${fill}">
             <div class="slider-marks">
               ${[15, 30, 60, 120, 240].map((m) => `<button type="button" data-mark="${m}">${m}s</button>`).join("")}
             </div>
@@ -209,13 +237,12 @@ function renderCreate() {
   `;
 }
 
-function updateDurationUI(val) {
+function updateDurationUI(raw) {
+  const val = durationFor(raw);
   state.form.duration = val;
   const slider = $("#duration-slider");
   if (slider) {
-    const min = parseFloat(slider.min) || 15;
-    const max = parseFloat(slider.max) || 240;
-    slider.style.setProperty("--fill", String((val - min) / (max - min)));
+    slider.style.setProperty("--fill", String(raw / 1000));
   }
   const out = $("#duration-value");
   if (out) out.textContent = `${val}s`;
@@ -784,7 +811,13 @@ document.addEventListener("click", (e) => {
   }
 
   const mark = e.target.closest("[data-mark]");
-  if (mark) { updateDurationUI(parseInt(mark.dataset.mark, 10)); return; }
+  if (mark) {
+    const raw = rawFor(parseInt(mark.dataset.mark, 10));
+    const slider = $("#duration-slider");
+    if (slider) slider.value = String(raw);
+    updateDurationUI(raw);
+    return;
+  }
 
   const t = e.target.closest("[data-action]");
   if (!t) return;
