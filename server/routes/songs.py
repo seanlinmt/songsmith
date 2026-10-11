@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from .. import config, db
+from .. import config, db, image
 from ..queue import create_job
 
 router = APIRouter(prefix="/api/songs", tags=["songs"])
@@ -169,6 +169,27 @@ def extend_song(song_id: str, req: ExtendRequest):
     )
     create_job(new_id, group_id, "extend")
     return {"job_group_id": group_id, "songs": [{"id": new_id, "job_group_id": group_id, "status": "queued"}]}
+
+
+@router.post("/{song_id}/cover")
+async def regenerate_cover(song_id: str):
+    """Regenerate cover art only — audio and job state are untouched."""
+    song = db.get_song(song_id)
+    if song is None:
+        raise HTTPException(404, "song not found")
+    try:
+        await image.generate_cover(
+            db.cover_file_path(song_id),
+            title=song.get("title") or None,
+            tags=song.get("tags") or [],
+            lyrics=song.get("lyrics") or None,
+            prompt=song.get("prompt") or None,
+        )
+    except Exception as exc:  # noqa: BLE001 - surfaced as 502
+        raise HTTPException(502, f"cover generation failed: {exc}") from exc
+    db.execute("UPDATE songs SET cover_path = ? WHERE id = ?",
+               (f"covers/{song_id}.png", song_id))
+    return _song_public(db.get_song(song_id))
 
 
 # ---- lyrics: structured read + inline edit (word-level timing comes later) ----
