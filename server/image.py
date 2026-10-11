@@ -24,22 +24,22 @@ async def generate_cover(out_path, title: str | None = None,
     """
     has_title = bool(title)
     image_prompt = (
-        f"illustrated album cover artwork for the song '{title}'" if has_title
-        else "illustrated album cover artwork"
+        f"photorealistic album cover photograph for the song '{title}'" if has_title
+        else "photorealistic album cover photograph"
     )
     if tags:
         image_prompt += f", {', '.join(tags)} style"
     if has_title:
         image_prompt += (
-            ", rich full-bleed scene filling the entire frame, subject and "
-            f"imagery central, the song title '{title}' appears once at the top "
-            "as the only text, spelled correctly, no other words, letters, "
-            "watermarks, or logos, high quality"
+            ", cinematic realistic photography, full-bleed scene filling the "
+            f"entire frame, subject and imagery central, the song title '{title}' "
+            "appears once at the top as the only text, spelled correctly, no "
+            "other words, letters, watermarks, or logos, high quality"
         )
     else:
-        image_prompt += (", rich full-bleed scene filling the entire frame, "
-                         "no text, no words, no letters, no watermarks, "
-                         "no logos, high quality")
+        image_prompt += (", cinematic realistic photography, full-bleed scene "
+                         "filling the entire frame, no text, no words, no "
+                         "letters, no watermarks, no logos, high quality")
     payload = {
         "model": config.IMAGE_MODEL,
         "prompt": image_prompt,
