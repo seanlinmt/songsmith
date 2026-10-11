@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from .. import config, llm
+from .styles import STYLES
 
 router = APIRouter(tags=["settings"])
 
@@ -29,4 +30,5 @@ def get_settings():
         "music_model": config.MUSIC_MODEL,
         "image_model": config.IMAGE_MODEL,
         "endpoints": {"localai": config.LOCALAI_URL, "llm": config.LLM_URL},
+        "recommended_styles": STYLES,
     }
