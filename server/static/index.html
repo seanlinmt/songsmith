@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>Songsmith — AI song studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%238b5cf6'/%3E%3Cstop offset='1' stop-color='%2322d3ee'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath fill='url(%23g)' d='M9 18.5a3.5 3.5 0 1 1-2-3.16V5.2a1 1 0 0 1 .76-.97l9-2.25A1 1 0 0 1 18 2.95v3.1a1 1 0 0 1-.76.97L10 8.72v9.78z'/%3E%3C/svg%3E">
+</head>
+<body>
+  <!-- svg icon sprite -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="icon-grad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#22d3ee"/>
+      </linearGradient>
+      <symbol id="i-note" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M9 18.5a3.5 3.5 0 1 1-2-3.16V5.2a1 1 0 0 1 .76-.97l9-2.25A1 1 0 0 1 18 2.95v3.1a1 1 0 0 1-.76.97L10 8.72v9.78H9z"/>
+      </symbol>
+      <symbol id="i-sparkle" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2l1.9 5.6L19.5 9.5l-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9L12 2zm7 12l.95 2.8 2.8.95-2.8.95L19 21.5l-.95-2.8-2.8-.95 2.8-.95L19 14zM5 14l.7 2.05L7.75 16.75 5.7 17.45 5 19.5l-.7-2.05L2.25 16.75l2.05-.7L5 14z"/>
+      </symbol>
+      <symbol id="i-library" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M4 4h6v16H4zM14 4h6v16h-6z"/><path d="M7 8.5h.01M17 8.5h.01"/>
+      </symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </symbol>
+      <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a.7.7 0 0 0 1.07.6l10.2-6.5a.7.7 0 0 0 0-1.2L9.07 4.9A.7.7 0 0 0 8 5.5z"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h3.2v14H7zM13.8 5H17v14h-3.2z"/></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+      </symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6h12z"/>
+      </symbol>
+      <symbol id="i-extend" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 5v14M5 12h14"/>
+      </symbol>
+      <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M18 6L6 18M6 6l12 12"/>
+      </symbol>
+      <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 9l6 6 6-6"/>
+      </symbol>
+      <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 6L9 17l-5-5"/>
+      </symbol>
+      <symbol id="i-note-ph" viewBox="0 0 24 24" fill="url(#icon-grad)">
+        <path d="M9 18.5a3.5 3.5 0 1 1-2-3.16V5.2a1 1 0 0 1 .76-.97l9-2.25A1 1 0 0 1 18 2.95v3.1a1 1 0 0 1-.76.97L10 8.72v9.78H9z"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <div id="app">
+    <nav class="sidebar" aria-label="Primary">
+      <div class="brand">
+        <span class="brand-mark"><svg><use href="#i-note"/></svg></span>
+        <span>Songsmith<small>AI song studio</small></span>
+      </div>
+      <button class="nav-btn" data-nav="create">
+        <svg><use href="#i-sparkle"/></svg><span class="nav-label">Create</span>
+        <span class="nav-dot" title="Generation in progress"></span>
+      </button>
+      <button class="nav-btn" data-nav="library">
+        <svg><use href="#i-library"/></svg><span class="nav-label">Library</span>
+        <span class="nav-dot" title="Generation in progress"></span>
+      </button>
+      <button class="nav-btn" data-nav="settings">
+        <svg><use href="#i-settings"/></svg><span class="nav-label">Settings</span>
+        <span class="nav-dot" title="Generation in progress"></span>
+      </button>
+      <div class="sidebar-foot">
+        <div>Local-first generation</div>
+        <div class="health-inline" id="nav-health"></div>
+      </div>
+    </nav>
+
+    <main class="main" id="main">
+      <section class="view" id="view-create" hidden></section>
+      <section class="view" id="view-library" hidden></section>
+      <section class="view" id="view-settings" hidden></section>
+    </main>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast-root" aria-live="polite"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
