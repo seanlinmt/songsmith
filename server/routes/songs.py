@@ -35,7 +35,16 @@ def _song_public(song: dict) -> dict:
     out["negative_tags"] = song.get("negative_tags") or []
     out["suno_status"] = STATUS_MAP.get(song.get("status"), song.get("status"))
     out["audio_url"] = f"/files/{song['audio_path']}" if song.get("audio_path") else None
-    out["cover_url"] = f"/files/{song['cover_path']}" if song.get("cover_path") else None
+    cover_url = f"/files/{song['cover_path']}" if song.get("cover_path") else None
+    if cover_url:
+        # Cache-bust: cover file is overwritten in place on regeneration, so
+        # append mtime so browsers refetch instead of serving the stale image.
+        p = config.DATA_DIR / song["cover_path"]
+        try:
+            cover_url = f"{cover_url}?v={int(p.stat().st_mtime)}"
+        except OSError:
+            pass
+    out["cover_url"] = cover_url
     return out
 
 
