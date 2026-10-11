@@ -4,7 +4,7 @@ import logging
 
 import httpx
 
-from . import config
+from . import config, llm
 
 log = logging.getLogger("songsmith.image")
 
@@ -17,16 +17,29 @@ async def generate_cover(out_path, title: str | None = None,
                          prompt: str | None = None) -> str:
     """Generate cover art and save to out_path. Returns out_path as str.
 
-    The image prompt is built from the song's title and genre tags only.
-    The `lyrics` and `prompt` parameters are intentionally unused in the
-    prompt (kept for caller compatibility) — quoting prose made Flux render
-    literal (garbled) sentences on the cover.
+    The image prompt is built from an LLM-condensed visual scene of the
+    song's lyrics/description (NOT raw quoted lyrics — that made Flux render
+    garbled literal sentences on the cover), plus the song title and genre
+    tags. When the LLM fails or no lyrics/description exist, the prompt
+    falls back to title + tags only.
     """
     has_title = bool(title)
-    image_prompt = (
-        f"photorealistic album cover photograph for the song '{title}'" if has_title
-        else "photorealistic album cover photograph"
-    )
+    scene = None
+    if lyrics or prompt:
+        try:
+            scene = await llm.describe_cover_scene(lyrics, prompt, tags)
+        except Exception:
+            log.exception("cover scene description failed; using title/tags only")
+    if scene:
+        if has_title:
+            image_prompt = (f"photorealistic album cover photograph, {scene} "
+                            f"for the song '{title}'")
+        else:
+            image_prompt = f"photorealistic album cover photograph, {scene}"
+    elif has_title:
+        image_prompt = f"photorealistic album cover photograph for the song '{title}'"
+    else:
+        image_prompt = "photorealistic album cover photograph"
     if tags:
         image_prompt += f", {', '.join(tags)} style"
     if has_title:

@@ -138,6 +138,40 @@ async def expand_style(prompt: str, tags: list[str]) -> tuple[str, list[str]]:
         return fallback
 
 
+COVER_SCENE_SYSTEM = (
+    "You describe a single striking photograph for a song's album cover. "
+    "Reply with ONLY a vivid visual scene description (max 40 words): subject, "
+    "setting, mood, lighting. No song lyrics, no quoted text, no titles, no "
+    "camera jargon, no explanation."
+)
+
+
+async def describe_cover_scene(lyrics: str | None, prompt: str | None,
+                               tags: list[str] | None = None) -> str | None:
+    """Best-effort: condense lyrics/description into a visual scene for the
+    image model. Returns None on any failure."""
+    if not (lyrics or prompt):
+        return None
+    parts = []
+    if prompt:
+        parts.append(f"Song description: {prompt}")
+    if lyrics:
+        parts.append(f"Lyrics:\n{lyrics[:2000]}")
+    if tags:
+        parts.append(f"Style: {', '.join(tags)}")
+    try:
+        async with httpx.AsyncClient() as client:
+            content = await _chat(client, [
+                {"role": "system", "content": COVER_SCENE_SYSTEM},
+                {"role": "user", "content": "\n\n".join(parts)},
+            ], temperature=0.6)
+        scene = " ".join(content.strip().strip('"').split())
+        return scene or None
+    except Exception:
+        log.exception("cover scene description failed")
+        return None
+
+
 async def check_health() -> dict:
     try:
         async with httpx.AsyncClient() as client:
