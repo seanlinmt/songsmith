@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from . import config, db, queue
-from .routes import health, jobs, settings, songs
+from .routes import health, jobs, settings, songs, styles
 
 logging.basicConfig(level=logging.INFO)
 
@@ -27,6 +27,7 @@ app.include_router(songs.router)
 app.include_router(jobs.router)
 app.include_router(health.router)
 app.include_router(settings.router)
+app.include_router(styles.router)
 
 # Serve generated audio/covers from the data dir.
 config.ensure_dirs()

@@ -43,15 +43,20 @@ async def request_ace_step(
     duration: int, seed: int | None,
     style_prompt: str | None = None,
     negative_tags: list[str] | None = None,
+    vocal_gender: str | None = None,
 ) -> bytes:
     """Single point of truth for the ACE-Step request format.
 
     Returns the raw response bytes (FLAC).
     """
+    sent_prompt = style_prompt or prompt
+    if vocal_gender:
+        # ACE-Step has no verified vocal-gender field; hint it via the prompt.
+        sent_prompt = f"{sent_prompt}, {vocal_gender} vocals"
     payload = {
         "model": config.MUSIC_MODEL,
         # style_prompt is a richer replacement for the raw prompt
-        "prompt": style_prompt or prompt,
+        "prompt": sent_prompt,
         "duration_seconds": duration,
         "seed": seed,
     }
@@ -122,6 +127,7 @@ async def generate(
     duration: int, seed: int | None,
     style_prompt: str | None = None,
     negative_tags: list[str] | None = None,
+    vocal_gender: str | None = None,
 ) -> dict:
     """Generate music for a song and persist it.
 
@@ -132,6 +138,7 @@ async def generate(
     flac_bytes = await request_ace_step(
         prompt, lyrics, instrumental, duration, seed,
         style_prompt=style_prompt, negative_tags=negative_tags,
+        vocal_gender=vocal_gender,
     )
 
     flac_path = config.DATA_DIR / "audio" / f"{song_id}.flac"

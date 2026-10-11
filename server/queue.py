@@ -127,6 +127,7 @@ async def _run_generation(job: dict) -> None:
         seed=seed,
         style_prompt=style_prompt,
         negative_tags=negative_tags,
+        vocal_gender=song.get("vocal_gender"),
     )
 
     # 4. Update song row (audio done)
@@ -167,6 +168,14 @@ async def _run_extend(job: dict) -> None:
     seed = song["seed"]
 
     _update_job(job_id, progress=0.2, message="extending song")
+    if song.get("continue_at") is not None:
+        # Partial-window regeneration is persisted but not yet sent to
+        # ACE-Step (verified request fields only); planned for later.
+        log.warning(
+            "song %s: continue_at=%s/infill window persisted but not sent to "
+            "ACE-Step (full-clip extension only for now)",
+            song_id, song["continue_at"],
+        )
     parent_neg = parent.get("negative_tags")
     if isinstance(parent_neg, str):
         try:
@@ -182,6 +191,7 @@ async def _run_extend(job: dict) -> None:
         seed=seed,
         style_prompt=parent.get("style_prompt"),
         negative_tags=parent_neg or [],
+        vocal_gender=parent.get("vocal_gender"),
     )
     _set_song(
         song_id,
