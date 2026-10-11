@@ -488,6 +488,7 @@ function renderLibrary() {
           </div>
           <div class="card-actions">
             <button class="btn btn-ghost btn-sm" data-action="regen" data-id="${esc(s.id)}" title="Regenerate">${svgUse("i-refresh")}<span class="visually-hidden">Regenerate</span></button>
+            <button class="btn btn-ghost btn-sm" data-action="regen-cover" data-id="${esc(s.id)}" title="Regenerate cover art" aria-label="Regenerate cover art">${svgUse("i-image")}<span class="visually-hidden">Regenerate cover art</span></button>
             ${state.config?.supports_extend
               ? `<button class="btn btn-ghost btn-sm" data-action="extend" data-id="${esc(s.id)}" title="Extend">${svgUse("i-extend")}<span class="visually-hidden">Extend</span></button>` : ""}
             <button class="btn btn-ghost btn-sm" data-action="download-wav" data-id="${esc(s.id)}" title="Download WAV">${svgUse("i-download")}<span class="visually-hidden">Download WAV</span></button>
@@ -506,6 +507,26 @@ async function regenerate(id) {
     toast("Regeneration started — 1 new variation");
     setTab("library");
   } catch (err) { toast(`Regenerate failed: ${err.message}`, "err"); }
+}
+
+async function regenerateCover(id, btn) {
+  if (btn) {
+    btn.disabled = true;
+    btn.dataset.orig = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner"></span>';
+  }
+  try {
+    const updated = await api(`/api/songs/${id}/cover`, { method: "POST" });
+    const i = state.songs.findIndex((s) => s.id === id);
+    if (i !== -1) state.songs[i] = updated;
+    renderLibrary();
+    // refresh the detail modal if it's open for this song
+    if ($(`#modal-root [data-action="regen-cover"][data-id="${id}"]`)) openDetail(id);
+    toast("Cover art updated");
+  } catch (err) {
+    toast(`Cover regen failed: ${err.message}`, "err");
+    if (btn) { btn.disabled = false; btn.innerHTML = btn.dataset.orig; }
+  }
 }
 
 function twoStepDelete(btn) {
@@ -631,6 +652,7 @@ function openDetail(id) {
             <button class="btn" data-action="download-flac" data-id="${esc(s.id)}">${svgUse("i-download")} Download FLAC</button>
             <a class="btn" href="/api/songs/${esc(s.id)}/mp3" download title="Download MP3">${svgUse("i-download")} Download MP3</a>
             <button class="btn btn-ghost" data-action="regen" data-id="${esc(s.id)}">${svgUse("i-refresh")} Regenerate</button>
+            <button class="btn btn-ghost" data-action="regen-cover" data-id="${esc(s.id)}" title="Regenerate cover art" aria-label="Regenerate cover art">${svgUse("i-image")} Regenerate cover</button>
             ${state.config?.supports_extend
               ? `<button class="btn btn-ghost" data-action="extend" data-id="${esc(s.id)}">${svgUse("i-extend")} Extend</button>` : ""}
           </div>
@@ -849,6 +871,7 @@ document.addEventListener("click", (e) => {
       break;
     }
     case "regen": regenerate(id); break;
+    case "regen-cover": regenerateCover(id, t); break;
     case "extend": openExtend(id); break;
     case "extend-confirm": confirmExtend(); break;
     case "download-wav": {
