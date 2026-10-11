@@ -15,14 +15,25 @@ from ..queue import create_job
 
 router = APIRouter(prefix="/api/songs", tags=["songs"])
 
+# Suno clip status lifecycle; `status` field stays as-is for backward compat.
+STATUS_MAP = {
+    "queued": "queued",
+    "running": "streaming",
+    "done": "complete",
+    "error": "error",
+}
+
 
 def _song_public(song: dict) -> dict:
     out = {k: song[k] for k in (
         "id", "created_at", "title", "prompt", "lyrics", "tags",
         "instrumental", "model", "seed", "duration_seconds", "status",
         "error", "job_group_id", "parent_id", "kind", "style_prompt",
+        "vocal_gender", "style_influence", "weirdness", "variety",
+        "continue_at",
     ) if k in song}
     out["negative_tags"] = song.get("negative_tags") or []
+    out["suno_status"] = STATUS_MAP.get(song.get("status"), song.get("status"))
     out["audio_url"] = f"/files/{song['audio_path']}" if song.get("audio_path") else None
     out["cover_url"] = f"/files/{song['cover_path']}" if song.get("cover_path") else None
     return out
@@ -38,10 +49,17 @@ class SongCreate(BaseModel):
     duration_seconds: int = 60
     batch_size: int = 1
     title: str = ""
+    vocal_gender: str | None = None
+    style_influence: float | None = None
+    weirdness: float | None = None
+    variety: int | None = None
 
 
 class ExtendRequest(BaseModel):
     duration_seconds: int
+    continue_at: int | None = None  # seconds into the parent to continue from
+    infill_start_s: int | None = None
+    infill_end_s: int | None = None
 
 
 @router.post("")
@@ -55,11 +73,13 @@ def create_song(req: SongCreate):
         seed = random.randint(0, 2**31 - 1)
         db.execute(
             "INSERT INTO songs (id, created_at, title, prompt, lyrics, tags, negative_tags,"
-            " style_prompt, instrumental, model, seed, duration_seconds, status,"
+            " style_prompt, vocal_gender, style_influence, weirdness, variety, continue_at,"
+            " instrumental, model, seed, duration_seconds, status,"
             " audio_path, cover_path, error, job_group_id, parent_id, kind)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'queued', NULL, NULL, NULL, ?, NULL, 'song')",
+            " VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'queued', NULL, NULL, NULL, ?, NULL, 'song')",
             (song_id, now, req.title or '', req.prompt, req.lyrics,
              json.dumps(req.tags), json.dumps(req.negative_tags),
+             req.vocal_gender, req.style_influence, req.weirdness, req.variety,
              int(instrumental),
              config.MUSIC_MODEL, seed, req.duration_seconds, group_id),
         )
@@ -107,11 +127,14 @@ def regenerate_song(song_id: str):
     seed = random.randint(0, 2**31 - 1)
     db.execute(
         "INSERT INTO songs (id, created_at, title, prompt, lyrics, tags, negative_tags,"
-        " style_prompt, instrumental, model, seed, duration_seconds, status,"
+        " style_prompt, vocal_gender, style_influence, weirdness, variety, continue_at,"
+        " instrumental, model, seed, duration_seconds, status,"
         " audio_path, cover_path, error, job_group_id, parent_id, kind)"
-        " VALUES (?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', NULL, NULL, NULL, ?, NULL, 'song')",
+        " VALUES (?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'queued', NULL, NULL, NULL, ?, NULL, 'song')",
         (new_id, now, src["prompt"], src["lyrics"], json.dumps(src["tags"]),
          json.dumps(src.get("negative_tags") or []), src.get("style_prompt"),
+         src.get("vocal_gender"), src.get("style_influence"),
+         src.get("weirdness"), src.get("variety"),
          int(src["instrumental"]), src.get("model") or config.MUSIC_MODEL,
          seed, src.get("duration_seconds") or 60, group_id),
     )
@@ -132,16 +155,68 @@ def extend_song(song_id: str, req: ExtendRequest):
     seed = random.randint(0, 2**31 - 1)
     db.execute(
         "INSERT INTO songs (id, created_at, title, prompt, lyrics, tags, negative_tags,"
-        " style_prompt, instrumental, model, seed, duration_seconds, status,"
+        " style_prompt, vocal_gender, style_influence, weirdness, variety, continue_at,"
+        " instrumental, model, seed, duration_seconds, status,"
         " audio_path, cover_path, error, job_group_id, parent_id, kind)"
-        " VALUES (?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', NULL, NULL, NULL, ?, ?, 'extended')",
+        " VALUES (?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', NULL, NULL, NULL, ?, ?, 'extended')",
         (new_id, now, src["prompt"], src["lyrics"], json.dumps(src["tags"]),
          json.dumps(src.get("negative_tags") or []), src.get("style_prompt"),
+         src.get("vocal_gender"), src.get("style_influence"),
+         src.get("weirdness"), src.get("variety"),
+         req.continue_at if req.continue_at is not None else src.get("continue_at"),
          int(src["instrumental"]), src.get("model") or config.MUSIC_MODEL,
          seed, req.duration_seconds, group_id, song_id),
     )
     create_job(new_id, group_id, "extend")
     return {"job_group_id": group_id, "songs": [{"id": new_id, "job_group_id": group_id, "status": "queued"}]}
+
+
+# ---- lyrics: structured read + inline edit (word-level timing comes later) ----
+
+_SECTION_HEADER_RE = re.compile(r"^\s*\[([^\]]+)\]\s*$")
+_KNOWN_SECTIONS = {"intro", "verse", "pre-chorus", "chorus", "bridge", "hook", "outro"}
+
+
+def _parse_sections(lyrics: str) -> list[dict]:
+    """Split lyrics on [tag] headers into {'tag', 'lines'} sections.
+
+    Known section tags are lowercased; unknown tags are kept as-is.
+    Lines before the first header are ignored.
+    """
+    sections: list[dict] = []
+    current: dict | None = None
+    for line in lyrics.splitlines():
+        m = _SECTION_HEADER_RE.match(line)
+        if m:
+            raw = m.group(1).strip()
+            tag = raw.casefold() if raw.casefold() in _KNOWN_SECTIONS else raw
+            current = {"tag": tag, "lines": []}
+            sections.append(current)
+        elif current is not None and line.strip():
+            current["lines"].append(line)
+    return sections
+
+
+@router.get("/{song_id}/lyrics")
+def get_song_lyrics(song_id: str):
+    song = db.get_song(song_id)
+    if song is None:
+        raise HTTPException(404, "song not found")
+    lyrics = song.get("lyrics") or ""
+    return {"id": song_id, "lyrics": lyrics, "sections": _parse_sections(lyrics)}
+
+
+class LyricsUpdate(BaseModel):
+    lyrics: str
+
+
+@router.post("/{song_id}/lyrics")
+def update_song_lyrics(song_id: str, req: LyricsUpdate):
+    song = db.get_song(song_id)
+    if song is None:
+        raise HTTPException(404, "song not found")
+    db.execute("UPDATE songs SET lyrics = ? WHERE id = ?", (req.lyrics, song_id))
+    return _song_public(db.get_song(song_id))
 
 
 def _mp3_filename(song: dict) -> str:

@@ -32,7 +32,12 @@ CREATE TABLE IF NOT EXISTS songs (
     parent_id TEXT,
     kind TEXT NOT NULL DEFAULT 'song',
     style_prompt TEXT,
-    negative_tags TEXT
+    negative_tags TEXT,
+    vocal_gender TEXT,
+    style_influence REAL,
+    weirdness REAL,
+    variety INTEGER,
+    continue_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
@@ -48,6 +53,13 @@ CREATE TABLE IF NOT EXISTS jobs (
 );
 CREATE INDEX IF NOT EXISTS idx_jobs_group ON jobs(job_group_id);
 CREATE INDEX IF NOT EXISTS idx_songs_group ON songs(job_group_id);
+CREATE TABLE IF NOT EXISTS styles (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    tags TEXT NOT NULL DEFAULT '[]',
+    prompt TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -67,10 +79,19 @@ def _connect() -> sqlite3.Connection:
 def init_db() -> None:
     conn = _connect()
     conn.executescript(SCHEMA)
-    # Migrations for pre-existing DBs created before style fields existed.
-    for col in ("style_prompt", "negative_tags"):
+    # Migrations for pre-existing DBs created before these columns existed.
+    # (name, type) — new songs-table columns only; new tables come via SCHEMA.
+    for col, typ in (
+        ("style_prompt", "TEXT"),
+        ("negative_tags", "TEXT"),
+        ("vocal_gender", "TEXT"),
+        ("style_influence", "REAL"),
+        ("weirdness", "REAL"),
+        ("variety", "INTEGER"),
+        ("continue_at", "INTEGER"),
+    ):
         try:
-            conn.execute(f"ALTER TABLE songs ADD COLUMN {col} TEXT")
+            conn.execute(f"ALTER TABLE songs ADD COLUMN {col} {typ}")
         except sqlite3.OperationalError:
             pass  # column already exists
     conn.commit()
@@ -125,3 +146,24 @@ def audio_file_path(song_id: str) -> Path:
 
 def cover_file_path(song_id: str) -> Path:
     return config.DATA_DIR / "covers" / f"{song_id}.png"
+
+
+# ---- saved styles ----
+
+def _style_row_to_dict(row: dict) -> dict:
+    out = dict(row)
+    try:
+        out["tags"] = json.loads(out.get("tags") or "[]")
+    except (TypeError, json.JSONDecodeError):
+        out["tags"] = []
+    return out
+
+
+def list_styles() -> list[dict]:
+    rows = query_all("SELECT * FROM styles ORDER BY created_at ASC, id ASC")
+    return [_style_row_to_dict(r) for r in rows]
+
+
+def get_style(style_id: str) -> dict | None:
+    row = query_one("SELECT * FROM styles WHERE id = ?", (style_id,))
+    return _style_row_to_dict(row) if row else None
