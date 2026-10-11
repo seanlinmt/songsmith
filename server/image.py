@@ -17,10 +17,10 @@ async def generate_cover(out_path, title: str | None = None,
                          prompt: str | None = None) -> str:
     """Generate cover art and save to out_path. Returns out_path as str.
 
-    The image prompt is built from the song's title, genre tags, and the
-    original generation prompt. The `lyrics` parameter is intentionally
-    unused in the prompt (kept for caller compatibility) — quoting lyric
-    text made Flux render literal lyrics on the cover.
+    The image prompt is built from the song's title and genre tags only.
+    The `lyrics` and `prompt` parameters are intentionally unused in the
+    prompt (kept for caller compatibility) — quoting prose made Flux render
+    literal (garbled) sentences on the cover.
     """
     has_title = bool(title)
     image_prompt = (
@@ -29,8 +29,6 @@ async def generate_cover(out_path, title: str | None = None,
     )
     if tags:
         image_prompt += f", style: {', '.join(tags)}"
-    if prompt:
-        image_prompt += f", inspired by: {prompt}"
     if has_title:
         image_prompt += (f", the only text in the image is the exact song title "
                          f"'{title}' spelled correctly, no other words, letters, "
