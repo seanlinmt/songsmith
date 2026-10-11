@@ -20,23 +20,40 @@ async def generate_cover(out_path, title: str | None = None,
     The image prompt is built from the song's title, genre tags, a short
     lyric summary, and the original generation prompt.
     """
-    image_prompt = f"album cover art for the song '{title}'"
+    has_title = bool(title)
+    image_prompt = (
+        f"album cover art for the song '{title}'" if has_title
+        else "album cover art"
+    )
     if tags:
         image_prompt += f", style: {', '.join(tags)}"
     if lyrics:
         image_prompt += f", mood of lyrics: {lyrics[:160]}..."
     if prompt:
         image_prompt += f", inspired by: {prompt}"
-    image_prompt += ", high quality"
+    if has_title:
+        image_prompt += (f", the only text in the image is the exact song title "
+                         f"'{title}' spelled correctly, no other words, letters, "
+                         f"watermarks, or logos, high quality")
+    else:
+        image_prompt += (", no text, no words, no letters, no watermarks, "
+                         "no logos, high quality")
+    payload = {
+        "model": config.IMAGE_MODEL,
+        "prompt": image_prompt,
+        "n": 1,
+        "size": "512x512",
+    }
+    if not has_title:
+        # No title -> forbid text outright. Only added when absent: the
+        # endpoint may reject unknown fields, and there is no retry logic.
+        payload["negative_prompt"] = ("text, words, letters, typography, "
+                                      "watermarks, logos, gibberish text, "
+                                      "misspelled words")
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{config.LOCALAI_URL}/v1/images/generations",
-            json={
-                "model": config.IMAGE_MODEL,
-                "prompt": image_prompt,
-                "n": 1,
-                "size": "512x512",
-            },
+            json=payload,
             timeout=_TIMEOUT,
         )
         resp.raise_for_status()
