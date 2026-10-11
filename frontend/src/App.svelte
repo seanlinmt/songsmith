@@ -1,0 +1,320 @@
+<script>
+  import { onMount } from 'svelte';
+  import { api } from './lib/api.js';
+  import { toast, toasts } from './lib/toast.svelte.js';
+  import { supportsExtend } from './lib/songs.js';
+  import Nav from './lib/Nav.svelte';
+  import CreateView from './lib/CreateView.svelte';
+  import ProgressView from './lib/ProgressView.svelte';
+  import LibraryView from './lib/LibraryView.svelte';
+  import SettingsView from './lib/SettingsView.svelte';
+  import SongModal from './lib/SongModal.svelte';
+
+  /* ---------------- state ---------------- */
+  let route = $state('create');
+  let config = $state(null);
+  let configFailed = $state(false);
+  let songs = $state([]);
+  let activeGroup = $state(null);   // job_group_id currently being watched
+  let activeJobs = $state([]);      // last known job rows for that group
+  let pollTimer = null;             // plain (non-reactive) handle
+
+  let health = $state({
+    nav: 'unknown',
+    api: { state: 'unknown', err: '' },
+    music: { state: 'unknown', err: '' },
+    llm: { state: 'unknown', err: '' },
+    mini: { state: 'unknown', text: 'Checking API…', err: '' },
+  });
+
+  let modalSong = $state(null);
+  let modalAutoplay = $state(false);
+
+  const canExtend = $derived(supportsExtend(config));
+  const libraryMeta = $derived(
+    songs.length
+      ? songs.length + ' track' + (songs.length > 1 ? 's' : '') + ' · newest first'
+      : 'Your generated tracks, newest first.'
+  );
+  const capExtend = $derived(configFailed ? 'unknown' : config ? (canExtend ? 'yes' : 'no') : '—');
+  const capStereo = $derived(
+    config ? (config.supports_stereo === false ? 'no' : config.supports_stereo ? 'yes' : '—') : '—'
+  );
+  const musicModelLabel = $derived(config ? config.music_model || '' : '');
+  const llmModelLabel = $derived(config ? config.llm_model || '' : '');
+
+  /* ---------------- routing ---------------- */
+  function show(r, opts) {
+    if (r === 'progress' && !activeGroup && !opts) r = 'library';
+    route = r;
+    try { localStorage.setItem('ss_route', r); } catch (_) {}
+    window.scrollTo({ top: 0 });
+  }
+
+  function handleRoute(r) {
+    if (r === 'library') refreshLibrary();
+    if (r === 'settings') refreshSettings();
+    show(r);
+  }
+
+  /* ---------------- create ---------------- */
+  function onStarted(gid) {
+    activeGroup = gid;
+    activeJobs = [];
+    show('progress', true);
+    startPolling();
+  }
+
+  /* ---------------- progress / polling ---------------- */
+  function startPolling() {
+    stopPolling();
+    pollJobs();
+    pollTimer = setInterval(pollJobs, 2500);
+  }
+
+  function stopPolling() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  }
+
+  async function pollJobs() {
+    const gid = activeGroup;
+    if (!gid) { stopPolling(); return; }
+    try {
+      const data = await api.get('/api/jobs?group=' + encodeURIComponent(gid));
+      const rows = Array.isArray(data) ? data : (data && (data.jobs || data.songs || data.items)) || [];
+      activeJobs = rows;
+      const allDone = rows.length > 0 && rows.every((j) => ['complete', 'completed', 'failed', 'error', 'cancelled'].includes(String(j.status || '').toLowerCase()));
+      if (allDone) {
+        activeGroup = null;
+        activeJobs = [];
+        stopPolling();
+        await refreshLibrary();
+        show('library');
+        toast('Your songs are ready');
+      }
+    } catch (_) { /* transient — keep polling */ }
+  }
+
+  function abandonPoll() {
+    stopPolling();
+    refreshLibrary();
+    show('library');
+    toast('You can keep browsing — it stays in Library');
+  }
+
+  /* ---------------- library ---------------- */
+  async function refreshLibrary() {
+    try {
+      const data = await api.get('/api/songs');
+      songs = Array.isArray(data) ? data : (data && (data.songs || data.items)) || [];
+    } catch (err) {
+      toast("Couldn't load library: " + err.message, 'err');
+    }
+  }
+
+  async function deleteSong(id) {
+    try {
+      await api.send('/api/songs/' + encodeURIComponent(id), 'DELETE');
+      songs = songs.filter((s) => String(s.id) !== String(id));
+      toast('Deleted');
+    } catch (err) { toast('Delete failed: ' + err.message, 'err'); }
+  }
+
+  async function regenerateSong(id) {
+    try {
+      const res = await api.send('/api/songs/' + encodeURIComponent(id) + '/regenerate', 'POST', {});
+      activeGroup = (res && res.job_group_id) || null;
+      activeJobs = [];
+      show('progress', true);
+      startPolling();
+      toast('Regenerating — 2 new variations');
+    } catch (err) { toast('Regenerate failed: ' + err.message, 'err'); }
+  }
+
+  async function extendSong(id) {
+    try {
+      await api.send('/api/songs/' + encodeURIComponent(id) + '/extend', 'POST', {});
+      toast('Extending song…');
+      setTimeout(refreshLibrary, 1200);
+    } catch (err) { toast('Extend failed: ' + err.message, 'err'); }
+  }
+
+  /* ---------------- modal ---------------- */
+  function openModal(song, autoplay) {
+    modalSong = { ...song };
+    modalAutoplay = autoplay;
+  }
+
+  function closeModal() {
+    modalSong = null;
+  }
+
+  /* ---------------- settings / health ---------------- */
+  function applyHealth(h) {
+    health.api = { state: 'ok', err: '' };
+    health.nav = 'ok';
+    health.mini.state = 'ok';
+    health.mini.text = 'API online';
+
+    let anyDown = false;
+    const services = (h && (h.services || h.components)) || {};
+    const music = services.music || services.localai || services.music_model || null;
+    const llm = services.llm || services.llm_model || null;
+    if (music && typeof music === 'object') {
+      const ok = music.ok !== false && music.status !== 'down' && music.status !== 'error';
+      anyDown = anyDown || !ok;
+      health.music = { state: ok ? 'ok' : 'error', err: ok ? '' : music.error || music.detail || music.message || 'unreachable' };
+    } else health.music = { state: 'ok', err: '' };
+    if (llm && typeof llm === 'object') {
+      const ok = llm.ok !== false && llm.status !== 'down' && llm.status !== 'error';
+      anyDown = anyDown || !ok;
+      health.llm = { state: ok ? 'ok' : 'error', err: ok ? '' : llm.error || llm.detail || llm.message || 'unreachable' };
+    } else health.llm = { state: 'ok', err: '' };
+    if (anyDown) health.nav = 'error';
+  }
+
+  async function refreshHealth(notify) {
+    health.api = { state: 'busy', err: '' };
+    health.music = { state: 'busy', err: '' };
+    health.llm = { state: 'busy', err: '' };
+    health.mini.state = 'busy';
+    health.mini.text = 'Checking…';
+    health.mini.err = '';
+    try {
+      const h = await api.get('/api/health');
+      applyHealth(h);
+      if (notify) toast('Health check complete');
+    } catch (err) {
+      health.api = { state: 'error', err: err.message };
+      health.music = { state: 'error', err: 'unreachable — API offline' };
+      health.llm = { state: 'error', err: 'unreachable — API offline' };
+      health.mini.state = 'error';
+      health.mini.text = 'API unreachable';
+      health.mini.err = err.message;
+      health.nav = 'error';
+      if (notify) toast('Health check failed', 'err');
+    }
+  }
+
+  async function refreshSettings() {
+    try {
+      const cfg = await api.get('/api/config');
+      config = cfg || {};
+      configFailed = false;
+    } catch (err) {
+      configFailed = true;
+      if (route === 'settings') toast('Config unavailable: ' + err.message, 'err');
+    }
+    refreshHealth(false);
+  }
+
+  /* ---------------- active job recovery ---------------- */
+  async function recoverActive() {
+    try {
+      const data = await api.get('/api/jobs/active');
+      const rows = Array.isArray(data) ? data : (data && (data.jobs || data.items)) || [];
+      if (rows.length) {
+        activeJobs = rows;
+        activeGroup = (rows[0] && (rows[0].job_group_id || rows[0].group_id)) || activeGroup;
+        if (activeGroup) {
+          show('progress');
+          startPolling();
+          return true;
+        }
+      }
+    } catch (_) { /* fine */ }
+    return false;
+  }
+
+  /* ---------------- boot ---------------- */
+  async function boot() {
+    let r = 'create';
+    try { r = localStorage.getItem('ss_route') || 'create'; } catch (_) {}
+    show(r === 'progress' ? 'create' : r);
+
+    // config + health fire-and-forget
+    refreshSettings();
+    // library
+    await refreshLibrary();
+    // recover in-flight jobs
+    const recovered = await recoverActive();
+    if (recovered) return;
+    if (['create', 'library', 'settings'].includes(route)) refreshHealth(false);
+  }
+
+  onMount(() => {
+    boot();
+
+    const onKey = (e) => { if (e.key === 'Escape' && modalSong) closeModal(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  });
+</script>
+
+<div class="bg-orbs" aria-hidden="true">
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+</div>
+<div class="noise" aria-hidden="true"></div>
+
+<!-- ============ NAV ============ -->
+<Nav route={route} libraryCount={songs.length} healthState={health.nav} onRoute={handleRoute} onRefreshHealth={() => refreshHealth(true)} />
+
+<main class="shell" id="shell">
+  <!-- ============ CREATE ============ -->
+  <section class="view" id="viewCreate" data-view="create" hidden={route !== 'create'}>
+    <CreateView health={health} onStarted={onStarted} />
+  </section>
+
+  <!-- ============ PROGRESS ============ -->
+  <section class="view" id="viewProgress" data-view="progress" hidden={route !== 'progress'}>
+    <ProgressView jobs={activeJobs} activeGroup={activeGroup} onAbandon={abandonPoll} />
+  </section>
+
+  <!-- ============ LIBRARY ============ -->
+  <section class="view" id="viewLibrary" data-view="library" hidden={route !== 'library'}>
+    <LibraryView
+      songs={songs}
+      meta={libraryMeta}
+      supportsExtend={canExtend}
+      onOpen={(s) => openModal(s, false)}
+      onPlay={(s) => openModal(s, true)}
+      onRegen={regenerateSong}
+      onExtend={extendSong}
+      onDelete={deleteSong}
+      onRefresh={refreshLibrary}
+      onGoCreate={() => show('create')}
+    />
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section class="view" id="viewSettings" data-view="settings" hidden={route !== 'settings'}>
+    <SettingsView
+      config={config}
+      health={health}
+      capExtend={capExtend}
+      capStereo={capStereo}
+      musicModelLabel={musicModelLabel}
+      llmModelLabel={llmModelLabel}
+      onRefreshSettings={refreshSettings}
+      onRefreshHealth={() => refreshHealth(true)}
+    />
+  </section>
+</main>
+
+<!-- ============ SONG DETAIL MODAL ============ -->
+<SongModal
+  song={modalSong}
+  autoplay={modalAutoplay}
+  supportsExtend={canExtend}
+  onRegen={regenerateSong}
+  onExtend={extendSong}
+  onClose={closeModal}
+/>
+
+<!-- ============ TOASTS ============ -->
+<div class="toast-root" id="toastRoot" aria-live="polite">
+  {#each toasts as t (t.id)}
+    <div class="toast {t.type}" class:leaving={t.leaving}>{@html t.svg}<span>{t.msg}</span></div>
+  {/each}
+</div>

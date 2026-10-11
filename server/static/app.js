@@ -1,956 +1,696 @@
 /* ============================================================
-   Songsmith — SPA logic (vanilla JS, no frameworks)
+   Songsmith — app.js
+   Vanilla JS SPA. Served from server/static/, talks to the
+   FastAPI backend on the same origin.
    ============================================================ */
-"use strict";
+(function () {
+  "use strict";
 
-/* ---------- tiny helpers ---------- */
-const $ = (sel, el = document) => el.querySelector(sel);
-const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
+  /* ---------------- helpers ---------------- */
+  const $ = (sel, root) => (root || document).querySelector(sel);
+  const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmtDur = (s) => {
+    const n = Math.max(0, Math.round(Number(s) || 0));
+    return Math.floor(n / 60) + ":" + String(n % 60).padStart(2, "0");
+  };
+  const fmtBytes = (b) => {
+    if (b == null || isNaN(b)) return "";
+    if (b > 1048576) return (b / 1048576).toFixed(1) + " MB";
+    if (b > 1024) return Math.round(b / 1024) + " KB";
+    return b + " B";
+  };
+  const fileUrl = (p) => {
+    if (!p) return "";
+    return "/" + String(p).replace(/^\.?\//, "").replace(/^\/+/, "");
+  };
+  const el = (tag, cls, html) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (html != null) n.innerHTML = html;
+    return n;
+  };
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
-function esc(str) {
-  return String(str ?? "").replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  }[c]));
-}
-
-function fmtDuration(s) {
-  if (s == null || isNaN(s)) return "—";
-  const m = Math.floor(s / 60), r = Math.round(s % 60);
-  return `${m}:${String(r).padStart(2, "0")}`;
-}
-
-function fmtDate(iso) {
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-    });
-  } catch { return "—"; }
-}
-
-function elapsedSince(iso) {
-  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return `${Math.floor(s)}s`;
-  return `${Math.floor(s / 60)}m ${Math.floor(s % 60)}s`;
-}
-
-async function api(path, opts = {}) {
-  const res = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
-    ...opts,
-  });
-  if (!res.ok) {
-    let detail = `HTTP ${res.status}`;
-    try { detail = (await res.json()).detail || detail; } catch {}
-    const err = new Error(detail);
-    err.status = res.status;
-    throw err;
-  }
-  return res.json();
-}
-
-function toast(msg, kind = "ok", ms = 4200) {
-  const root = $("#toast-root");
-  const el = document.createElement("div");
-  el.className = `toast ${kind}`;
-  el.innerHTML = `<span class="toast-dot"></span><span>${esc(msg)}</span>`;
-  root.appendChild(el);
-  setTimeout(() => {
-    el.classList.add("leaving");
-    el.addEventListener("animationend", () => el.remove(), { once: true });
-  }, ms);
-}
-
-/* gradient placeholder colors, stable per song id */
-function hashHues(id) {
-  let h = 0;
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360;
-  return [h, (h + 70) % 360];
-}
-
-/* ---------- state ---------- */
-const state = {
-  tab: "create",
-  config: null,
-  health: null,
-  songs: [],
-  lyricsOpen: false,
-  lyricsBusy: false,
-  lyricsError: null,
-  chipsActive: new Set(),
-  form: { prompt: "", lyrics: "", instrumental: false, duration: 60 },
-  activeGroups: new Map(),   // gid -> {jobs, type, startedAt}
-  finishingGroups: new Map(),// gid -> {jobs, removeAt}
-  knownNew: new Set(),
-  audio: new Audio(),
-  playingId: null,
-  extendSongId: null,
-};
-
-const STYLE_CHIPS = [
-  "synth-pop", "lo-fi", "funk rock", "dream pop", "synthwave",
-  "jazz", "ambient", "indie rock", "orchestral", "house",
-];
-
-/* ---------- shared audio ---------- */
-function stopAudio() {
-  state.audio.pause();
-  state.playingId = null;
-  syncPlayIcons();
-}
-
-function togglePlay(song) {
-  if (!song.audio_url) { toast("Audio is not ready yet", "err"); return; }
-  if (state.playingId === song.id) { stopAudio(); return; }
-  stopAudio();
-  state.audio.src = song.audio_url;
-  state.audio.play().catch(() => toast("Could not play audio", "err"));
-  state.playingId = song.id;
-  syncPlayIcons();
-}
-
-function syncPlayIcons() {
-  $$('[data-action="play"]').forEach((btn) => {
-    const on = state.playingId === btn.dataset.id;
-    btn.innerHTML = svgUse(on ? "i-pause" : "i-play");
-  });
-  $$("[data-song-card]").forEach((c) => c.classList.toggle("playing", c.dataset.songCard === state.playingId));
-}
-
-state.audio.addEventListener("ended", stopAudio);
-
-function svgUse(id, cls = "") {
-  return `<svg class="${cls}" aria-hidden="true"><use href="#${id}"/></svg>`;
-}
-
-/* ---------- navigation ---------- */
-function setTab(tab) {
-  state.tab = tab;
-  $$(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.nav === tab));
-  ["create", "library", "settings"].forEach((t) => {
-    $(`#view-${t}`).hidden = t !== tab;
-  });
-  if (tab === "library") loadSongs().then(renderLibrary).catch(() => {});
-  if (tab === "settings") renderSettings();
-  if (tab === "create") renderCreate();
-  renderProgress();
-}
-
-/* ============================================================
-   CREATE view
-   ============================================================ */
-/* ---------- duration slider mapping (raw 0..1000 -> seconds) ----------
-   Anchors [15, 30, 60, 120, 240] sit at raw positions [0, 250, 500, 750, 1000],
-   each segment interpolating linearly, so the slider thumb tracks the
-   evenly-spaced tick marks exactly. */
-const DURATION_ANCHORS = [15, 30, 60, 120, 240];
-const DURATION_RAW_STEP = 250; // raw distance between anchors
-
-function durationFor(raw) {
-  const clamped = Math.min(1000, Math.max(0, raw));
-  const seg = Math.min(DURATION_ANCHORS.length - 2, Math.floor(clamped / DURATION_RAW_STEP));
-  const t = (clamped - seg * DURATION_RAW_STEP) / DURATION_RAW_STEP;
-  const d = DURATION_ANCHORS[seg] + t * (DURATION_ANCHORS[seg + 1] - DURATION_ANCHORS[seg]);
-  return Math.round(d / 5) * 5; // 5s granularity for display/API
-}
-
-function rawFor(duration) {
-  const d = Math.min(240, Math.max(15, duration));
-  let seg = DURATION_ANCHORS.length - 2;
-  for (let i = 0; i < DURATION_ANCHORS.length - 1; i++) {
-    if (d >= DURATION_ANCHORS[i] && d <= DURATION_ANCHORS[i + 1]) { seg = i; break; }
-  }
-  const t = (d - DURATION_ANCHORS[seg]) / (DURATION_ANCHORS[seg + 1] - DURATION_ANCHORS[seg]);
-  return Math.round(seg * DURATION_RAW_STEP + t * DURATION_RAW_STEP);
-}
-
-function renderCreate() {
-  const f = state.form;
-  /* Duration slider operates on a raw 0..1000 scale mapped piecewise-linearly
-     onto anchors [15, 30, 60, 120, 240] at raw positions [0, 250, 500, 750, 1000],
-     so the thumb lines up with the evenly-spaced tick marks. */
-  const fill = (rawFor(f.duration) / 1000).toFixed(4);
-  $("#view-create").innerHTML = `
-    <div class="view-head">
-      <h1>Create a song</h1>
-      <p>Describe the sound you're after. One song is generated per request.</p>
-    </div>
-    <div id="progress-create"></div>
-    <div class="create-panel">
-      <div>
-        <label class="field-label" for="prompt-input">Describe your song</label>
-        <textarea id="prompt-input" class="prompt-input"
-          placeholder="e.g. dreamy synthwave, warm analog pads, 104 bpm, distant female vocals">${esc(f.prompt)}</textarea>
-      </div>
-
-      <div class="control-block">
-        <div class="field-label">Style tags <span class="hint">click to add to the prompt</span></div>
-        <div class="chips" id="chips">
-          ${STYLE_CHIPS.map((c) => `
-            <button type="button" class="chip ${state.chipsActive.has(c) ? "active" : ""}" data-chip="${esc(c)}">${esc(c)}</button>
-          `).join("")}
-        </div>
-      </div>
-
-      <div class="collapsible ${state.lyricsOpen ? "open" : ""}" id="lyrics-collapsible">
-        <button type="button" class="collapsible-head" data-action="toggle-lyrics">
-          <span>Custom lyrics</span>
-          <svg class="chev" width="16" height="16"><use href="#i-chev"/></svg>
-        </button>
-        <div class="collapsible-body">
-          <textarea id="lyrics-input" class="lyrics-input"
-            placeholder="[Verse]&#10;Write your own lines, or let the model draft them.&#10;[Chorus]&#10;Use [Verse] / [Chorus] / [Bridge] tags to structure sections.">${esc(f.lyrics)}</textarea>
-          <div class="lyrics-actions">
-            <button type="button" class="btn" data-action="write-lyrics" ${state.lyricsBusy ? "disabled" : ""}>
-              ${state.lyricsBusy ? '<span class="spinner"></span> Writing…' : "✨ Write lyrics for me"}
-            </button>
-            ${state.lyricsError ? `<span class="lyrics-error">${esc(state.lyricsError)}</span>` : ""}
-          </div>
-        </div>
-      </div>
-
-      <div class="create-row">
-        <div class="control-block">
-          <span class="field-label">Vocals</span>
-          <label class="toggle">
-            <input type="checkbox" id="instrumental-toggle" ${f.instrumental ? "checked" : ""}>
-            <span class="toggle-track"></span>
-            <span class="toggle-label">Instrumental</span>
-          </label>
-        </div>
-        <div class="control-block duration-block">
-          <span class="field-label">Duration <span class="duration-value" id="duration-value">${f.duration}s</span></span>
-          <div class="slider-wrap">
-            <input type="range" id="duration-slider" class="slider" min="0" max="1000" step="25" value="${rawFor(f.duration)}" style="--fill:${fill}">
-            <div class="slider-marks">
-              ${[15, 30, 60, 120, 240].map((m) => `<button type="button" data-mark="${m}">${m}s</button>`).join("")}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="create-foot">
-        <span class="foot-hint">1 song is created per request.</span>
-        <span id="create-error" class="form-error"></span>
-        <button type="button" class="btn btn-primary btn-generate" data-action="generate">${svgUse("i-sparkle")} Generate</button>
-      </div>
-    </div>
-  `;
-}
-
-function updateDurationUI(raw) {
-  const val = durationFor(raw);
-  state.form.duration = val;
-  const slider = $("#duration-slider");
-  if (slider) {
-    slider.style.setProperty("--fill", String(raw / 1000));
-  }
-  const out = $("#duration-value");
-  if (out) out.textContent = `${val}s`;
-}
-
-async function writeLyrics() {
-  const prompt = $("#prompt-input").value.trim();
-  const errEl = $("#create-error");
-  if (errEl) errEl.textContent = "";
-  if (!prompt) { toast("Describe the song first — the lyricist needs a direction", "err"); return; }
-  state.lyricsBusy = true;
-  renderCreate();
-  try {
-    const { lyrics } = await api("/api/lyrics", { method: "POST", body: JSON.stringify({ prompt }) });
-    state.form.lyrics = lyrics;
-    state.lyricsOpen = true;
-    state.lyricsBusy = false;
-    state.lyricsError = null;
-    renderCreate();
-  } catch (err) {
-    state.lyricsBusy = false;
-    state.lyricsError = err.message;
-    renderCreate();
-  }
-}
-
-async function generate() {
-  const prompt = $("#prompt-input").value.trim();
-  const lyrics = $("#lyrics-input") ? $("#lyrics-input").value.trim() : "";
-  const errEl = $("#create-error");
-  if (errEl) errEl.textContent = "";
-  if (!prompt && !lyrics) {
-    if (errEl) errEl.textContent = "Add a prompt or some lyrics first.";
-    return;
-  }
-  state.form.prompt = prompt;
-  state.form.lyrics = lyrics;
-  const btn = $('[data-action="generate"]');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Starting…'; }
-  try {
-    const res = await api("/api/songs", {
-      method: "POST",
-      body: JSON.stringify({
-        prompt: prompt || lyrics.slice(0, 120),
-        lyrics,
-        tags: [...state.chipsActive],
-        instrumental: state.form.instrumental,
-        duration_seconds: state.form.duration,
-      }),
-    });
-    trackGroup(res.job_group_id, "generate");
-    setTab("library");
-    toast("Generation started — 1 song queued");
-  } catch (err) {
-    toast(`Could not start generation: ${err.message}`, "err");
-    if (btn) { btn.disabled = false; renderCreate(); }
-  }
-}
-
-/* ============================================================
-   progress / skeletons
-   ============================================================ */
-function trackGroup(gid, type) {
-  state.activeGroups.set(gid, { jobs: [], type, startedAt: new Date().toISOString() });
-  pollTick();
-}
-
-function groupLabel(type) {
-  return { generate: "Generating", regenerate: "Regenerating", extend: "Extending" }[type] || "Generating";
-}
-
-function jobStatusLine(job) {
-  if (!job) return `<span class="msg"><span class="spinner" style="width:10px;height:10px;border-width:1.5px"></span> queued</span>`;
-  if (job.status === "error") return `<span class="error-msg">${esc(job.message || "failed")}</span>`;
-  if (job.status === "done") return `<span class="done-msg">ready ${svgUse("i-check", "ok-ic")}</span>`;
-  return `<span class="msg blink-dots">${esc(job.message || "working")}</span>`;
-}
-
-function skeletonCard(job) {
-  const pct = job ? Math.round((job.progress || 0) * 100) : 0;
-  return `
-    <div class="skeleton-card">
-      <div class="skeleton-cover"></div>
-      <div class="skeleton-body">
-        <div class="sk-line w60"></div>
-        <div class="sk-line w40"></div>
-        <div class="sk-progress">
-          <div class="sk-bar"><i style="width:${pct}%"></i></div>
-          <div class="sk-status ${job?.status === "error" ? "error-msg" : ""}">
-            <span class="status-line">${jobStatusLine(job)}</span>
-            <span>${job?.status === "done" ? "" : `${pct}%`}</span>
-          </div>
-        </div>
-      </div>
-    </div>`;
-}
-
-function renderProgress() {
-  const containers = ["#progress-create", "#progress-library"]
-    .map((s) => $(s))
-    .filter(Boolean);
-  if (!containers.length) return;
-
-  let html = "";
-  for (const [gid, g] of state.activeGroups) {
-    const shown = g.jobs.length >= 2 ? g.jobs.slice(0, 2) : [g.jobs[0], null];
-    html += `
-      <div class="progress-group" data-group="${esc(gid)}">
-        <div class="progress-title">
-          <span class="live-dot"></span>
-          ${esc(groupLabel(g.type))}
-          ${g.jobs[0] ? `<span>· started ${elapsedSince(g.jobs[0].created_at)} ago</span>` : ""}
-        </div>
-        <div class="progress-grid">${shown.map((j) => skeletonCard(j)).join("")}</div>
-      </div>`;
-  }
-  for (const [, g] of state.finishingGroups) {
-    html += `
-      <div class="progress-group">
-        <div class="progress-title">${esc(groupLabel(g.type))} · finished</div>
-        <div class="progress-grid">${g.jobs.slice(0, 2).map((j) => skeletonCard(j)).join("")}</div>
-      </div>`;
-  }
-
-  for (const c of containers) c.innerHTML = html;
-  $$(".nav-btn").forEach((b) => b.classList.toggle("has-activity", state.activeGroups.size > 0));
-}
-
-async function pollTick() {
-  if (state._polling) return;
-  state._polling = true;
-  try {
-    const active = await api("/api/jobs/active");
-    const groups = new Map();
-    for (const j of active) {
-      if (!groups.has(j.job_group_id)) groups.set(j.job_group_id, { type: j.type, startedAt: j.created_at });
-    }
-
-    // groups that vanished -> fetch final state once, hold briefly, then drop
-    for (const [gid, g] of state.activeGroups) {
-      if (!groups.has(gid)) {
-        try {
-          const finalJobs = await api(`/api/jobs?group=${encodeURIComponent(gid)}`);
-          state.finishingGroups.set(gid, { jobs: finalJobs, type: g.type });
-          const failed = finalJobs.some((j) => j.status === "error");
-          const okCount = finalJobs.filter((j) => j.status === "done").length;
-          if (okCount) toast(`${okCount} ${okCount > 1 ? "variations" : "variation"} ready — added to your library`);
-          else if (failed) toast("Generation failed — see the error in your library", "err", 6500);
-          await loadSongs();
-          for (const s of finalJobs.map((j) => j.song_id)) state.knownNew.add(s);
-          if (state.tab === "library") renderLibrary();
-        } catch {}
-        state.activeGroups.delete(gid);
-        setTimeout(() => { state.finishingGroups.delete(gid); renderProgress(); }, 5000);
+  const api = {
+    async json(res) {
+      const text = await res.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch (_) { /* non-JSON */ }
+      if (!res.ok) {
+        const detail = data && (data.detail || data.error || data.message);
+        throw new Error(detail ? (typeof detail === "string" ? detail : JSON.stringify(detail)) : "HTTP " + res.status);
       }
-    }
+      return data;
+    },
+    get(path) { return fetch(path).then((r) => this.json(r)); },
+    send(path, method, body) {
+      return fetch(path, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }).then((r) => this.json(r));
+    },
+  };
 
-    // refresh job rows per active group (per-song status)
-    for (const [gid, g] of groups) {
-      try {
-        const jobs = await api(`/api/jobs?group=${encodeURIComponent(gid)}`);
-        const prev = state.activeGroups.get(gid);
-        state.activeGroups.set(gid, {
-          jobs,
-          type: jobs[0]?.type || g.type,
-          startedAt: prev?.startedAt || g.startedAt,
-        });
-      } catch {}
-    }
-    renderProgress();
-  } catch {} finally {
-    state._polling = false;
-  }
-}
+  /* ---------------- toast ---------------- */
+  const TICK_OK = '<svg class="tico" viewBox="0 0 24 24" fill="none"><path d="m5 13 4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const TICK_ERR = '<svg class="tico" viewBox="0 0 24 24" fill="none"><path d="M12 8v5m0 3.5v.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-width="1.8"/></svg>';
 
-/* ============================================================
-   LIBRARY view
-   ============================================================ */
-async function loadSongs() {
-  state.songs = await api("/api/songs");
-}
-
-function coverMarkup(song) {
-  const [h1, h2] = hashHues(song.id);
-  const ph = `
-    <div class="cover-placeholder" style="background:linear-gradient(135deg,hsl(${h1} 70% 24%),hsl(${h2} 75% 18%))">
-      <svg class="ph-note"><use href="#i-note-ph"/></svg>
-    </div>`;
-  const img = song.cover_url
-    ? `<img class="cover-img" src="${esc(song.cover_url)}" alt="" loading="lazy" onerror="this.remove()">`
-    : "";
-  return ph + img;
-}
-
-function renderLibrary() {
-  const view = $("#view-library");
-  if (!state.songs.length) {
-    view.innerHTML = `
-      <div class="view-head"><h1>Library</h1></div>
-      <div class="empty-state">
-        <div class="vinyl" aria-hidden="true"></div>
-        <div>
-          <h2>Create your first song</h2>
-          <p>Nothing here yet. Head to Create, describe a sound, and Songsmith will handle the rest.</p>
-        </div>
-        <button class="btn btn-primary" data-nav-jump="create">${svgUse("i-sparkle")} Start creating</button>
-      </div>`;
-    return;
+  function toast(msg, type, ms) {
+    const t = el("div", "toast " + (type || "ok"));
+    t.innerHTML = (type === "err" ? TICK_ERR : TICK_OK) + "<span>" + esc(msg) + "</span>";
+    $("#toastRoot").appendChild(t);
+    setTimeout(() => {
+      t.classList.add("leaving");
+      setTimeout(() => t.remove(), 260);
+    }, ms || 3400);
   }
 
-  const activeGids = new Set(state.activeGroups.keys());
-  const songs = state.songs.filter((s) => !activeGids.has(s.job_group_id));
+  /* ---------------- state ---------------- */
+  const state = {
+    route: "create",
+    config: null,
+    songs: [],
+    activeGroup: null,   // job_group_id currently being watched
+    activeJobs: [],      // last known job rows for that group
+    pollTimer: null,
+    activeJobCount: 0,
+  };
 
-  view.innerHTML = `
-    <div class="view-head"><h1>Library</h1><p>${songs.length} song${songs.length === 1 ? "" : "s"} · newest first</p></div>
-    <div id="progress-library"></div>
-    <div class="song-grid">
-      ${songs.map((s) => {
-        const isPlaying = state.playingId === s.id;
-        const isNew = state.knownNew.has(s.id);
-        return `
-        <article class="song-card ${isPlaying ? "playing" : ""} ${s.status === "error" ? "error-card" : ""} ${isNew ? "is-new" : ""}"
-                 data-song-card="${esc(s.id)}">
-          <div class="card-cover" data-action="open-detail" data-id="${esc(s.id)}" role="button" tabindex="0" aria-label="Open ${esc(s.title || "song")} details">
-            ${coverMarkup(s)}
-            <div class="play-overlay">
-              <button class="play-btn" data-action="play" data-id="${esc(s.id)}" aria-label="${isPlaying ? "Pause" : "Play"}">
-                ${svgUse(isPlaying ? "i-pause" : "i-play")}
-              </button>
-            </div>
-            <div class="card-badges">
-              ${s.kind === "extended" ? '<span class="badge badge-extended">extended</span>' : ""}
-              <span class="badge">${fmtDuration(s.duration_seconds)}</span>
-            </div>
-          </div>
-          <div class="card-body">
-            <div class="card-title" data-action="open-detail" data-id="${esc(s.id)}" title="${esc(s.title || s.prompt)}">
-              ${esc(s.title || s.prompt?.slice(0, 60) || "Untitled")}
-            </div>
-            ${s.status === "error" && s.error
-              ? `<div class="card-error">${esc(s.error)}</div>`
-              : `<div class="card-prompt">${esc(s.prompt || "")}</div>`}
-          </div>
-          <div class="card-actions">
-            <button class="btn btn-ghost btn-sm" data-action="regen" data-id="${esc(s.id)}" title="Regenerate">${svgUse("i-refresh")}<span class="visually-hidden">Regenerate</span></button>
-            <button class="btn btn-ghost btn-sm" data-action="regen-cover" data-id="${esc(s.id)}" title="Regenerate cover art" aria-label="Regenerate cover art">${svgUse("i-image")}<span class="visually-hidden">Regenerate cover art</span></button>
-            ${state.config?.supports_extend
-              ? `<button class="btn btn-ghost btn-sm" data-action="extend" data-id="${esc(s.id)}" title="Extend">${svgUse("i-extend")}<span class="visually-hidden">Extend</span></button>` : ""}
-            <button class="btn btn-ghost btn-sm" data-action="download-wav" data-id="${esc(s.id)}" title="Download WAV">${svgUse("i-download")}<span class="visually-hidden">Download WAV</span></button>
-            <a class="btn btn-ghost btn-sm" href="/api/songs/${esc(s.id)}/mp3" download title="Download MP3">${svgUse("i-download")}<span class="visually-hidden">Download MP3</span></a>
-            <button class="btn btn-danger btn-sm" data-action="delete" data-id="${esc(s.id)}" title="Delete">Delete</button>
-          </div>
-        </article>`;
-      }).join("")}
-    </div>`;
-}
+  const supportsExtend = () => !!(state.config && state.config.supports_extend);
 
-async function regenerate(id) {
-  try {
-    const res = await api(`/api/songs/${id}/regenerate`, { method: "POST" });
-    trackGroup(res.job_group_id, "regenerate");
-    toast("Regeneration started — 1 new variation");
-    setTab("library");
-  } catch (err) { toast(`Regenerate failed: ${err.message}`, "err"); }
-}
+  /* ---------------- routing ---------------- */
+  const VIEWS = { create: "#viewCreate", progress: "#viewProgress", library: "#viewLibrary", settings: "#viewSettings" };
+  const TABS = { create: "#tabCreate", library: "#tabLibrary", settings: "#tabSettings" };
 
-async function regenerateCover(id, btn) {
-  if (btn) {
+  function show(route, opts) {
+    if (route === "progress" && !state.activeGroup && !opts) route = "library";
+    state.route = route;
+    Object.entries(VIEWS).forEach(([k, sel]) => { $(sel).hidden = k !== route; });
+    Object.entries(TABS).forEach(([k, sel]) => {
+      const b = $(sel);
+      if (b) b.setAttribute("aria-selected", k === route ? "true" : "false");
+    });
+    try { localStorage.setItem("ss_route", route); } catch (_) {}
+    window.scrollTo({ top: 0 });
+  }
+
+  $("#tabCreate").addEventListener("click", () => show("create"));
+  $("#tabLibrary").addEventListener("click", () => { refreshLibrary(); show("library"); });
+  $("#tabSettings").addEventListener("click", () => { refreshSettings(); show("settings"); });
+  $("#brandLink").addEventListener("click", (e) => { e.preventDefault(); show("create"); });
+  $("#emptyCreateBtn").addEventListener("click", () => show("create"));
+  $("#libraryRefresh").addEventListener("click", () => refreshLibrary());
+  $("#healthRefreshTop").addEventListener("click", () => refreshHealth(true));
+
+  /* ---------------- create screen ---------------- */
+  const PRESETS = [
+    { tag: "synth-pop" }, { tag: "lo-fi" }, { tag: "funk rock" }, { tag: "dream pop" },
+    { tag: "synthwave" }, { tag: "jazz" }, { tag: "orchestral" }, { tag: "trap" },
+    { tag: "acoustic folk" }, { tag: "city pop" },
+  ];
+  const DURATIONS = [15, 30, 60, 120];
+  const chipRow = $("#styleChips");
+  const selectedTags = new Set();
+
+  PRESETS.forEach((p) => {
+    const b = el("button", "chip");
+    b.type = "button";
+    b.textContent = p.tag;
+    b.setAttribute("aria-pressed", "false");
+    b.dataset.tag = p.tag;
+    b.addEventListener("click", () => {
+      const on = b.getAttribute("aria-pressed") === "true";
+      b.setAttribute("aria-pressed", on ? "false" : "true");
+      if (on) selectedTags.delete(p.tag);
+      else selectedTags.add(p.tag);
+    });
+    chipRow.appendChild(b);
+  });
+
+  const promptInput = $("#promptInput");
+  promptInput.addEventListener("input", () => { $("#promptCount").textContent = promptInput.value.length + " / 2000"; });
+
+  const lyricsToggle = $("#lyricsToggle");
+  const lyricsPanel = $("#lyricsPanel");
+  lyricsToggle.addEventListener("click", () => {
+    const open = lyricsToggle.getAttribute("aria-expanded") === "true";
+    lyricsToggle.setAttribute("aria-expanded", String(!open));
+    lyricsPanel.hidden = open;
+  });
+
+  $("#writeLyricsBtn").addEventListener("click", async () => {
+    const btn = $("#writeLyricsBtn");
+    const label = btn.innerHTML;
     btn.disabled = true;
-    btn.dataset.orig = btn.innerHTML;
-    btn.innerHTML = '<span class="spinner"></span>';
-  }
-  try {
-    const updated = await api(`/api/songs/${id}/cover`, { method: "POST" });
-    const i = state.songs.findIndex((s) => s.id === id);
-    if (i !== -1) state.songs[i] = updated;
-    renderLibrary();
-    // refresh the detail modal if it's open for this song
-    if ($(`#modal-root [data-action="regen-cover"][data-id="${id}"]`)) openDetail(id);
-    toast("Cover art updated");
-  } catch (err) {
-    toast(`Cover regen failed: ${err.message}`, "err");
-    if (btn) { btn.disabled = false; btn.innerHTML = btn.dataset.orig; }
-  }
-}
-
-function twoStepDelete(btn) {
-  if (btn.dataset.confirming) {
-    const id = btn.dataset.id;
-    deleteSong(id);
-    return;
-  }
-  btn.dataset.confirming = "1";
-  btn.textContent = "Confirm?";
-  btn.classList.add("btn-confirm");
-  setTimeout(() => {
-    if (!btn.isConnected) return;
-    delete btn.dataset.confirming;
-    btn.textContent = "Delete";
-    btn.classList.remove("btn-confirm");
-  }, 3200);
-}
-
-async function deleteSong(id) {
-  try {
-    await api(`/api/songs/${id}`, { method: "DELETE" });
-    if (state.playingId === id) stopAudio();
-    toast("Song deleted");
-    await loadSongs();
-    renderLibrary();
-  } catch (err) { toast(`Delete failed: ${err.message}`, "err"); }
-}
-
-async function downloadFile(url, filename) {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const blob = await res.blob();
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  } catch {
-    window.open(url, "_blank");
-  }
-}
-
-function songById(id) { return state.songs.find((s) => s.id === id); }
-
-function downloadName(song, ext) {
-  const base = (song.title || song.prompt || "song").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").slice(0, 60) || "song";
-  return `${base}.${ext}`;
-}
-
-/* ============================================================
-   detail modal
-   ============================================================ */
-const WAVE_BARS = 56;
-
-function waveHeights(id) {
-  let seed = 0;
-  for (const c of id) seed = (seed * 33 + c.charCodeAt(0)) % 9973;
-  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
-  return Array.from({ length: WAVE_BARS }, (_, i) => {
-    const envelope = 0.35 + 0.65 * Math.abs(Math.sin((i / WAVE_BARS) * Math.PI * 3));
-    return Math.max(8, Math.round((10 + rnd() * 90) * envelope));
+    btn.innerHTML = '<span class="spark" aria-hidden="true">✨</span> Writing…';
+    try {
+      const data = await api.send("/api/lyrics", "POST", { prompt: promptInput.value || "an uplifting synth-pop song" });
+      const lyrics = data && (data.lyrics || data.text || "");
+      if (lyrics) {
+        $("#lyricsInput").value = String(lyrics).slice(0, 6000);
+        if (lyricsPanel.hidden) lyricsToggle.click();
+        toast("Lyrics drafted");
+      } else toast("No lyrics returned", "err");
+    } catch (err) { toast("Lyrics failed: " + err.message, "err"); }
+    btn.disabled = false;
+    btn.innerHTML = label;
   });
-}
 
-function renderLyrics(lyrics) {
-  if (!lyrics || !lyrics.trim()) return `<p class="lyrics-empty">No lyrics — instrumental or pending.</p>`;
-  return lyrics.split(/\r?\n/).map((line) => {
-    const m = line.match(/^\s*\[(.+?)\]\s*$/);
-    if (m) return `<span class="section-tag">${esc(m[1])}</span>`;
-    if (!line.trim()) return "";
-    return `<p>${esc(line)}</p>`;
-  }).join("");
-}
+  const instToggle = $("#instrumentalToggle");
+  instToggle.addEventListener("click", () => {
+    instToggle.setAttribute("aria-checked", instToggle.getAttribute("aria-checked") === "true" ? "false" : "true");
+  });
 
-function openDetail(id) {
-  const s = songById(id);
-  if (!s) return;
-  const playing = state.playingId === s.id;
-  const heights = waveHeights(s.id);
-  $("#modal-root").innerHTML = `
-    <div class="modal-backdrop" data-action="close-modal">
-      <div class="modal" role="dialog" aria-modal="true" aria-label="${esc(s.title || "Song details")}">
-        <div class="modal-hero">
-          ${coverMarkup(s)}
-          <button class="modal-close" data-action="close-modal" aria-label="Close">${svgUse("i-x")}</button>
-          <div class="modal-hero-fade"></div>
-        </div>
-        <div class="modal-body">
-          <div class="modal-title-row">
-            <h2>${esc(s.title || s.prompt?.slice(0, 80) || "Untitled")}</h2>
-            ${s.kind === "extended" ? '<span class="badge badge-extended">extended</span>' : ""}
-          </div>
+  const durSlider = $("#durationSlider");
+  function paintRange() {
+    const pct = (durSlider.value / (DURATIONS.length - 1)) * 100;
+    durSlider.style.setProperty("--fill", pct + "%");
+    $("#durationReadout").textContent = DURATIONS[durSlider.value] + "s";
+  }
+  durSlider.addEventListener("input", paintRange);
+  paintRange();
 
-          <div class="wave-player">
-            <button class="wave-play" data-action="play" data-id="${esc(s.id)}" data-song-id="${esc(s.id)}" aria-label="Play">
-              ${svgUse(playing ? "i-pause" : "i-play")}
-            </button>
-            <div class="waveform" id="waveform" data-song-id="${esc(s.id)}">
-              ${heights.map((h) => `<span style="height:${h}%"></span>`).join("")}
-            </div>
-            <span class="wave-time" id="wave-time">0:00 / ${fmtDuration(s.duration_seconds)}</span>
-          </div>
-
-          <div class="meta-row">
-            <span>Model <b>${esc(s.model || "—")}</b></span>
-            <span>Seed <b>${s.seed ?? "—"}</b></span>
-            <span>Duration <b>${fmtDuration(s.duration_seconds)}</b></span>
-            <span>Created <b>${fmtDate(s.created_at)}</b></span>
-          </div>
-          ${s.status === "error" && s.error ? `<div class="card-error">${esc(s.error)}</div>` : ""}
-
-          <div>
-            <div class="field-label">Lyrics</div>
-            <div class="lyrics-block">${renderLyrics(s.lyrics)}</div>
-          </div>
-
-          <div class="modal-actions">
-            <button class="btn" data-action="download-wav" data-id="${esc(s.id)}">${svgUse("i-download")} Download WAV</button>
-            <button class="btn" data-action="download-flac" data-id="${esc(s.id)}">${svgUse("i-download")} Download FLAC</button>
-            <a class="btn" href="/api/songs/${esc(s.id)}/mp3" download title="Download MP3">${svgUse("i-download")} Download MP3</a>
-            <button class="btn btn-ghost" data-action="regen" data-id="${esc(s.id)}">${svgUse("i-refresh")} Regenerate</button>
-            <button class="btn btn-ghost" data-action="regen-cover" data-id="${esc(s.id)}" title="Regenerate cover art" aria-label="Regenerate cover art">${svgUse("i-image")} Regenerate cover</button>
-            ${state.config?.supports_extend
-              ? `<button class="btn btn-ghost" data-action="extend" data-id="${esc(s.id)}">${svgUse("i-extend")} Extend</button>` : ""}
-          </div>
-        </div>
-      </div>
-    </div>`;
-  document.body.style.overflow = "hidden";
-}
-
-function closeModal() {
-  $("#modal-root").innerHTML = "";
-  document.body.style.overflow = "";
-}
-
-/* audio -> waveform */
-state.audio.addEventListener("timeupdate", () => {
-  const wf = $("#waveform");
-  if (!wf || state.playingId !== wf.dataset.songId) return;
-  const dur = state.audio.duration || 1;
-  const played = state.audio.currentTime / dur;
-  const bars = wf.children;
-  const upto = Math.round(played * bars.length);
-  for (let i = 0; i < bars.length; i++) bars[i].classList.toggle("played", i < upto);
-  const t = $("#wave-time");
-  if (t) t.textContent = `${fmtDuration(state.audio.currentTime)} / ${fmtDuration(dur)}`;
-});
-
-/* ============================================================
-   extend modal
-   ============================================================ */
-function openExtend(id) {
-  const s = songById(id);
-  if (!s) return;
-  state.extendSongId = id;
-  const cur = s.duration_seconds || 60;
-  const def = Math.min(240, cur + 30);
-  $("#modal-root").innerHTML = `
-    <div class="modal-backdrop" data-action="close-modal">
-      <div class="modal" role="dialog" aria-modal="true" style="width:min(460px,100%)">
-        <div class="modal-body">
-          <div class="modal-title-row"><h2>Extend song</h2></div>
-          <p style="margin:0;color:var(--text-dim);font-size:var(--fs-sm)">
-            Creates a new longer variation of “${esc(s.title || s.prompt?.slice(0, 40) || "Untitled")}”.
-          </p>
-          <div class="control-block duration-block">
-            <span class="field-label">New duration <span class="duration-value" id="extend-value">${def}s</span></span>
-            <div class="slider-wrap">
-              <input type="range" id="extend-slider" class="slider" min="15" max="240" step="5" value="${def}" style="--fill:${((def - 15) / 225).toFixed(4)}">
-            </div>
-          </div>
-          <div class="modal-actions">
-            <button class="btn btn-primary" data-action="extend-confirm">${svgUse("i-extend")} Extend</button>
-            <button class="btn btn-ghost" data-action="close-modal">Cancel</button>
-          </div>
-        </div>
-      </div>
-    </div>`;
-}
-
-async function confirmExtend() {
-  const id = state.extendSongId;
-  const val = parseInt($("#extend-slider")?.value || "0", 10);
-  if (!id || !val) return;
-  try {
-    const res = await api(`/api/songs/${id}/extend`, {
-      method: "POST",
-      body: JSON.stringify({ duration_seconds: val }),
-    });
-    closeModal();
-    trackGroup(res.job_group_id, "extend");
-    toast("Extension started — a longer variation is queued");
-    setTab("library");
-  } catch (err) { toast(`Extend failed: ${err.message}`, "err"); }
-}
-
-/* ============================================================
-   SETTINGS view
-   ============================================================ */
-async function fetchHealth() {
-  state.health = await api("/api/health");
-}
-
-function healthRow(name, h) {
-  const up = !!h?.up;
-  const err = h?.error;
-  return `
-    <div class="health-row">
-      <span class="health-dot ${up ? "up" : "down"}" title="${up ? "healthy" : "unreachable"}"></span>
-      <div>
-        <div class="health-name">${esc(name)} <span class="health-meta">${up ? "online" : "offline"}</span></div>
-        ${err ? `<div class="health-error">${esc(err)}</div>` : ""}
-        ${!up && !err ? '<div class="health-error">Unreachable — check the endpoint URL.</div>' : ""}
-        ${h?.models?.length ? `<div class="health-meta">${h.models.length} model${h.models.length === 1 ? "" : "s"}: ${esc(h.models.slice(0, 4).join(", "))}${h.models.length > 4 ? "…" : ""}</div>` : ""}
-      </div>
-    </div>`;
-}
-
-function renderSettings() {
-  const view = $("#view-settings");
-  const c = state.config;
-  view.innerHTML = `
-    <div class="view-head">
-      <h1>Settings</h1>
-      <p>Local generation endpoints and model configuration. These are served by the Songsmith backend.</p>
-    </div>
-    <div class="settings-grid">
-      <div class="settings-card">
-        <h3>Endpoints</h3>
-        <dl class="kv-grid">
-          <dt>localai</dt><dd>${esc(c?.endpoints?.localai || "—")}</dd>
-          <dt>llm</dt><dd>${esc(c?.endpoints?.llm || "—")}</dd>
-        </dl>
-      </div>
-      <div class="settings-card">
-        <h3>Models</h3>
-        <dl class="kv-grid">
-          <dt>Music</dt><dd>${esc(c?.music_model || "—")}</dd>
-          <dt>Cover art</dt><dd>${esc(c?.image_model || "—")}</dd>
-          <dt>Lyricist</dt><dd>${esc(c?.llm_model || "—")}</dd>
-          <dt>Extend support</dt><dd>${c?.supports_extend ? "yes" : "no"}</dd>
-        </dl>
-      </div>
-      <div class="settings-card">
-        <div class="settings-toolbar">
-          <button class="btn btn-sm" data-action="refresh-health" ${state._healthBusy ? "disabled" : ""}>
-            ${state._healthBusy ? '<span class="spinner"></span> Checking…' : `${svgUse("i-refresh")} Refresh`}
-          </button>
-        </div>
-        ${state.health
-          ? healthRow("localai", state.health.localai) + healthRow("llm", state.health.llm)
-          : '<div class="health-meta">Loading health status…</div>'}
-      </div>
-    </div>`;
-  renderNavHealth();
-}
-
-function renderNavHealth() {
-  const el = $("#nav-health");
-  if (!el) return;
-  const h = state.health;
-  if (!h) { el.innerHTML = '<span class="health-dot down"></span> checking'; return; }
-  const up = h.localai?.up && h.llm?.up;
-  el.innerHTML = `<span class="health-dot ${up ? "up" : "down"}"></span> ${up ? "endpoints healthy" : "endpoint issues"}`;
-}
-
-async function refreshHealth(manual = true) {
-  state._healthBusy = true;
-  if (state.tab === "settings") renderSettings();
-  try {
-    await fetchHealth();
-    if (manual) toast("Health refreshed");
-  } catch { if (manual) toast("Could not reach health endpoint", "err"); }
-  state._healthBusy = false;
-  if (state.tab === "settings") renderSettings();
-}
-
-/* ============================================================
-   events
-   ============================================================ */
-document.addEventListener("click", (e) => {
-  const navBtn = e.target.closest("[data-nav]");
-  if (navBtn) { setTab(navBtn.dataset.nav); return; }
-  const jump = e.target.closest("[data-nav-jump]");
-  if (jump) { setTab(jump.dataset.navJump); return; }
-
-  const chip = e.target.closest("[data-chip]");
-  if (chip) {
-    const c = chip.dataset.chip;
-    const input = $("#prompt-input");
-    if (input) state.form.prompt = input.value;
-    if (state.chipsActive.has(c)) state.chipsActive.delete(c);
-    else state.chipsActive.add(c);
-    // reflect chips into the prompt text
-    const base = state.form.prompt.split(/,\s*/).filter((w) => !STYLE_CHIPS.includes(w.trim())).join(", ");
-    state.form.prompt = [base, ...state.chipsActive].filter(Boolean).join(", ");
-    renderCreate();
-    return;
+  function collectCreate() {
+    return {
+      prompt: promptInput.value.trim(),
+      lyrics: $("#lyricsInput").value.trim() || null,
+      tags: Array.from(selectedTags),
+      instrumental: instToggle.getAttribute("aria-checked") === "true",
+      duration_seconds: DURATIONS[Number(durSlider.value)],
+    };
   }
 
-  const mark = e.target.closest("[data-mark]");
-  if (mark) {
-    const raw = rawFor(parseInt(mark.dataset.mark, 10));
-    const slider = $("#duration-slider");
-    if (slider) slider.value = String(raw);
-    updateDurationUI(raw);
-    return;
+  $("#generateBtn").addEventListener("click", async () => {
+    const body = collectCreate();
+    if (!body.prompt) { toast("Describe your song first", "err"); promptInput.focus(); return; }
+    const btn = $("#generateBtn");
+    btn.disabled = true;
+    $("#generateLabel").textContent = "Starting…";
+    try {
+      const res = await api.send("/api/songs", "POST", body);
+      const gid = res && res.job_group_id;
+      if (!gid) throw new Error("no job_group_id in response");
+      state.activeGroup = gid;
+      state.activeJobs = [];
+      renderProgress();
+      show("progress", true);
+      startPolling();
+    } catch (err) {
+      toast("Generate failed: " + err.message, "err");
+    }
+    btn.disabled = false;
+    $("#generateLabel").textContent = "Generate";
+  });
+
+  /* ---------------- progress screen ---------------- */
+  const STAGES = [
+    { key: "writing lyrics", label: "Writing lyrics" },
+    { key: "naming song", label: "Naming your song" },
+    { key: "generating music", label: "Generating music" },
+    { key: "generating cover art", label: "Painting cover art" },
+  ];
+  const JOB_STAGES = ["queued", "writing_lyrics", "naming_song", "generating_music", "generating_cover", "complete"];
+  function stageFromJob(job) {
+    const s = String((job && (job.stage || job.status)) || "queued").toLowerCase().replace(/[\s-]+/g, "_");
+    const i = JOB_STAGES.indexOf(s);
+    if (i < 0) return 1;
+    return i;
   }
 
-  const t = e.target.closest("[data-action]");
-  if (!t) return;
-  const action = t.dataset.action;
-  const id = t.dataset.id;
+  const miniWave = (n, dur) => {
+    let h = "";
+    for (let i = 0; i < n; i++) {
+      const d = (0.7 + Math.random() * 0.65).toFixed(2);
+      h += '<i style="height:' + Math.round(10 + Math.random() * 34) + 'px;animation-delay:' + (Math.random() * -1.1).toFixed(2) + 's;animation-duration:' + d + 's"></i>';
+    }
+    return '<div class="wave-mini">' + h + "</div>";
+  };
 
-  switch (action) {
-    case "toggle-lyrics": {
-      const c = $("#lyrics-collapsible");
-      state.lyricsOpen = !c.classList.contains("open");
-      c.classList.toggle("open", state.lyricsOpen);
-      if (state.lyricsOpen) $("#lyrics-input")?.focus();
-      break;
+  function renderProgress() {
+    const grid = $("#progressGrid");
+    grid.innerHTML = "";
+    let jobs = state.activeJobs && state.activeJobs.length ? state.activeJobs.slice(0, 2) : null;
+    if (!jobs) {
+      jobs = [0, 1].map(() => ({ id: null, stage: "queued" }));
+      if (!state.activeGroup) return;
     }
-    case "write-lyrics": writeLyrics(); break;
-    case "generate": generate(); break;
-    case "play": {
-      const s = songById(id);
-      if (s) togglePlay(s);
-      break;
-    }
-    case "open-detail": openDetail(id); break;
-    case "close-modal": {
-      if (t.classList.contains("modal-backdrop")) {
-        if (e.target === t) closeModal(); // direct backdrop click only
+    jobs.forEach((job, idx) => {
+      const done = job && (String(job.status || "").toLowerCase() === "complete" || String(job.status || "").toLowerCase() === "completed");
+      const failed = job && ["failed", "error", "cancelled"].includes(String(job.status || "").toLowerCase());
+      const stageIdx = clamp(stageFromJob(job), 0, STAGES.length - 1);
+      const card = el("div", "glass card skeleton-card");
+      card.dataset.odId = "progress-card-" + (idx + 1);
+      let statusLabel, subLabel, pct;
+      if (done) {
+        statusLabel = "Complete";
+        subLabel = "Saved to Library";
+        pct = 100;
+      } else if (failed) {
+        statusLabel = "Failed";
+        subLabel = job.error || job.message || "Something went wrong";
+        pct = 100;
       } else {
-        closeModal(); // explicit close / cancel buttons
+        statusLabel = STAGES[stageIdx].label;
+        subLabel = "variation " + (idx + 1) + " · step " + (stageIdx + 1) + " / " + STAGES.length;
+        pct = Math.round(((stageIdx + 0.35) / STAGES.length) * 100);
       }
-      break;
-    }
-    case "regen": regenerate(id); break;
-    case "regen-cover": regenerateCover(id, t); break;
-    case "extend": openExtend(id); break;
-    case "extend-confirm": confirmExtend(); break;
-    case "download-wav": {
-      const s = songById(id);
-      if (s?.audio_url) downloadFile(s.audio_url, downloadName(s, s.audio_url.endsWith(".flac") ? "flac" : "wav"));
-      break;
-    }
-    case "download-flac": {
-      const s = songById(id);
-      if (s?.audio_url) downloadFile(s.audio_url.replace(/\.wav$/, ".flac"), downloadName(s, "flac"));
-      break;
-    }
-    case "delete": twoStepDelete(t); break;
-    case "refresh-health": refreshHealth(true); break;
+      card.innerHTML =
+        '<div class="skeleton-cover">' + miniWave(14) + "</div>" +
+        '<div class="skeleton-body">' +
+          (done ? "" : '<div class="skeleton-line" style="width:72%"></div><div class="skeleton-line" style="width:46%; margin-bottom:16px"></div>') +
+          '<div class="progress-card-status"><span class="status-dot" data-state="' + (failed ? "error" : done ? "ok" : "busy") + '"></span>' +
+          '<div><div class="progress-status-text">' + esc(statusLabel) + "</div>" +
+          '<div class="progress-sub">' + esc(subLabel) + "</div></div></div>" +
+          '<div class="progress-track"><div class="progress-bar" style="width:' + pct + '%"></div></div>' +
+        "</div>";
+      grid.appendChild(card);
+    });
   }
-});
 
-/* waveform seek */
-document.addEventListener("click", (e) => {
-  const wf = e.target.closest("#waveform");
-  if (!wf || !state.audio.src) return;
-  const rect = wf.getBoundingClientRect();
-  const pct = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-  state.audio.currentTime = pct * (state.audio.duration || 0);
-});
+  $("#cancelPollBtn").addEventListener("click", () => {
+    stopPolling();
+    refreshLibrary();
+    show("library");
+    toast("You can keep browsing — it stays in Library");
+  });
 
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && $("#modal-root").children.length) closeModal();
-  if (e.key === " " && state.playingId && !/input|textarea/i.test(e.target.tagName)) {
-    e.preventDefault();
-    const s = songById(state.playingId);
-    if (s) togglePlay(s);
+  function startPolling() {
+    stopPolling();
+    pollJobs();
+    state.pollTimer = setInterval(pollJobs, 2500);
   }
-});
-
-document.addEventListener("input", (e) => {
-  if (e.target.id === "duration-slider") updateDurationUI(parseInt(e.target.value, 10));
-  if (e.target.id === "prompt-input") state.form.prompt = e.target.value;
-  if (e.target.id === "lyrics-input") state.form.lyrics = e.target.value;
-  if (e.target.id === "extend-slider") {
-    const v = parseInt(e.target.value, 10);
-    $("#extend-value").textContent = `${v}s`;
-    e.target.style.setProperty("--fill", String((v - 15) / 225));
+  function stopPolling() {
+    if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
   }
-});
 
-document.addEventListener("change", (e) => {
-  if (e.target.id === "instrumental-toggle") state.form.instrumental = e.target.checked;
-});
+  async function pollJobs() {
+    const gid = state.activeGroup;
+    if (!gid) { stopPolling(); return; }
+    try {
+      const data = await api.get("/api/jobs?group=" + encodeURIComponent(gid));
+      const rows = Array.isArray(data) ? data : (data && (data.jobs || data.songs || data.items)) || [];
+      state.activeJobs = rows;
+      renderProgress();
+      const allDone = rows.length > 0 && rows.every((j) => ["complete", "completed", "failed", "error", "cancelled"].includes(String(j.status || "").toLowerCase()));
+      if (allDone) {
+        state.activeGroup = null;
+        state.activeJobs = [];
+        stopPolling();
+        await refreshLibrary();
+        show("library");
+        toast("Your songs are ready");
+      }
+    } catch (_) { /* transient — keep polling */ }
+  }
 
-/* ============================================================
-   boot
-   ============================================================ */
-async function boot() {
-  setTab("create");
-  const [config, songs, active] = await Promise.allSettled([
-    api("/api/config"),
-    api("/api/songs"),
-    api("/api/jobs/active"),
-  ]);
-  if (config.status === "fulfilled") state.config = config.value;
-  if (songs.status === "fulfilled") state.songs = songs.value;
-  if (active.status === "fulfilled") {
-    const groups = new Map();
-    for (const j of active.value) {
-      if (!groups.has(j.job_group_id)) groups.set(j.job_group_id, { type: j.type, startedAt: j.created_at });
+  /* ---------------- library ---------------- */
+  const ACT_ICONS = {
+    regen: '<svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    extend: '<svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    dl: '<svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 19h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    del: '<svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2m-8 0 .7 12a1.5 1.5 0 0 0 1.5 1.4h3.6a1.5 1.5 0 0 0 1.5-1.4L17 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  };
+
+  function songCoverUrl(s) {
+    if (s.cover_url) return fileUrl(s.cover_url);
+    if (s.cover_path) return fileUrl(s.cover_path);
+    if (s.id) return "/files/covers/" + s.id + ".png";
+    return "";
+  }
+  function songAudioUrl(s) {
+    if (s.audio_url) return fileUrl(s.audio_url);
+    if (s.audio_path) return fileUrl(s.audio_path);
+    if (s.id) return "/files/audio/" + s.id + ".wav";
+    return "";
+  }
+
+  function renderLibrary() {
+    const grid = $("#songGrid");
+    const empty = $("#libraryEmpty");
+    const list = state.songs;
+    $("#libraryCount").textContent = list.length;
+    $("#libraryCount").hidden = list.length === 0;
+    $("#libraryMeta").textContent = list.length
+      ? list.length + " track" + (list.length > 1 ? "s" : "") + " · newest first"
+      : "Your generated tracks, newest first.";
+    empty.hidden = list.length > 0;
+    grid.innerHTML = "";
+    list.forEach((s) => {
+      const id = s.id;
+      const cover = songCoverUrl(s);
+      const card = el("article", "glass song-card");
+      card.dataset.odId = "song-card-" + id;
+      card.tabIndex = 0;
+      card.setAttribute("role", "button");
+      card.setAttribute("aria-label", "Open " + (s.title || "song"));
+
+      const coverDiv = el("div", "song-cover");
+      coverDiv.innerHTML =
+        (cover
+          ? '<img loading="lazy" src="' + esc(cover) + '" alt="" width="300" height="300" onerror="this.style.display=\'none\'">'
+          : "") +
+        '<div class="cover-fallback"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" opacity=".5"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="2.4" fill="currentColor"/></svg></div>' +
+        '<span class="song-duration">' + esc(fmtDur(s.duration_seconds)) + "</span>" +
+        '<div class="play-overlay"><button class="play-btn" data-play="' + esc(id) + '" aria-label="Play ' + esc(s.title || "song") + '">' +
+          '<svg class="ico play-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></button></div>';
+
+      const titleBlock = el("div", "song-title-block");
+      const tags = Array.isArray(s.tags) ? s.tags.slice(0, 3) : [];
+      titleBlock.innerHTML =
+        '<div class="song-title">' + esc(s.title || "Untitled") + "</div>" +
+        (tags.length || s.instrumental ? '<div class="song-tags">' + tags.map((t) => '<span class="song-tag">' + esc(t) + "</span>").join("") + (s.instrumental ? '<span class="song-tag">instrumental</span>' : "") + "</div>" : "");
+
+      const actions = el("div", "song-actions");
+      actions.innerHTML =
+        '<button class="song-action" data-act="regen" data-id="' + esc(id) + '" title="Regenerate">' + ACT_ICONS.regen + "<span>Regen</span></button>" +
+        (supportsExtend() ? '<button class="song-action" data-act="extend" data-id="' + esc(id) + '" title="Extend">' + ACT_ICONS.extend + "<span>Extend</span></button>" : "") +
+        '<a class="song-action" data-act="dl" data-id="' + esc(id) + '" href="' + esc(songAudioUrl(s)) + '" download title="Download">' + ACT_ICONS.dl + "<span>Save</span></a>" +
+        '<button class="song-action danger" data-act="del" data-id="' + esc(id) + '" title="Delete">' + ACT_ICONS.del + "<span>Delete</span></button>";
+
+      card.appendChild(coverDiv);
+      card.appendChild(titleBlock);
+      card.appendChild(actions);
+      grid.appendChild(card);
+    });
+  }
+
+  async function refreshLibrary() {
+    try {
+      const data = await api.get("/api/songs");
+      state.songs = Array.isArray(data) ? data : (data && (data.songs || data.items)) || [];
+      renderLibrary();
+    } catch (err) {
+      toast("Couldn't load library: " + err.message, "err");
     }
-    for (const [gid, g] of groups) state.activeGroups.set(gid, { jobs: [], ...g });
-    if (groups.size) {
-      toast("Generation in progress — restored from the last session");
+  }
+
+  $("#songGrid").addEventListener("click", async (e) => {
+    const playBtn = e.target.closest("[data-play]");
+    const actBtn = e.target.closest("[data-act]");
+    if (playBtn) {
+      const s = state.songs.find((x) => String(x.id) === playBtn.dataset.play);
+      if (s) openModal(s, true);
+      return;
+    }
+    if (actBtn) {
+      const id = actBtn.dataset.id;
+      if (actBtn.dataset.act === "dl") return; // native download link
+      if (actBtn.dataset.act === "regen") return regenerateSong(id, actBtn);
+      if (actBtn.dataset.act === "extend") return extendSong(id, actBtn);
+      if (actBtn.dataset.act === "del") return deleteSong(id, actBtn);
+      return;
+    }
+    const card = e.target.closest(".song-card");
+    if (card) {
+      const s = state.songs.find((x) => String(x.id) === String(card.dataset.odId).replace("song-card-", ""));
+      if (s) openModal(s, false);
+    }
+  });
+
+  async function deleteSong(id, btn) {
+    if (btn) { btn.disabled = true; }
+    const song = state.songs.find((s) => String(s.id) === String(id));
+    const name = song && song.title ? '"' + song.title + '"' : "this song";
+    if (!confirm("Delete " + name + "? This can't be undone.")) { if (btn) btn.disabled = false; return; }
+    try {
+      await api.send("/api/songs/" + encodeURIComponent(id), "DELETE");
+      state.songs = state.songs.filter((s) => String(s.id) !== String(id));
+      renderLibrary();
+      toast("Deleted");
+    } catch (err) { toast("Delete failed: " + err.message, "err"); }
+    if (btn) btn.disabled = false;
+  }
+
+  async function regenerateSong(id, btn) {
+    if (btn) btn.disabled = true;
+    try {
+      const res = await api.send("/api/songs/" + encodeURIComponent(id) + "/regenerate", "POST", {});
+      state.activeGroup = (res && res.job_group_id) || null;
+      state.activeJobs = [];
+      renderProgress();
+      show("progress", true);
+      startPolling();
+      toast("Regenerating — 2 new variations");
+    } catch (err) { toast("Regenerate failed: " + err.message, "err"); }
+    if (btn) btn.disabled = false;
+  }
+
+  async function extendSong(id, btn) {
+    if (btn) btn.disabled = true;
+    try {
+      await api.send("/api/songs/" + encodeURIComponent(id) + "/extend", "POST", {});
+      toast("Extending song…");
+      setTimeout(refreshLibrary, 1200);
+    } catch (err) { toast("Extend failed: " + err.message, "err"); }
+    if (btn) btn.disabled = false;
+  }
+
+  /* ---------------- modal / player ---------------- */
+  const modal = $("#songModal");
+  const audio = $("#modalAudio");
+  const waveEl = $("#modalWave");
+  let waveBars = [];
+  let lastSongId = null;
+
+  function buildWave() {
+    waveEl.innerHTML = "";
+    waveBars = [];
+    const n = Math.max(24, Math.min(64, Math.floor(waveEl.clientWidth / 7)));
+    for (let i = 0; i < n; i++) {
+      const b = document.createElement("i");
+      b.style.height = Math.round(8 + Math.abs(Math.sin(i * 0.55)) * 30 + Math.random() * 8) + "px";
+      waveEl.appendChild(b);
+      waveBars.push(b);
     }
   }
-  renderCreate();
-  renderLibrary();
-  renderProgress();
-  refreshHealth(false);
 
-  await pollTick();
-  setInterval(pollTick, 2000);
-}
+  function paintWave() {
+    if (!audio.duration || !isFinite(audio.duration)) return;
+    const frac = clamp(audio.currentTime / audio.duration, 0, 1);
+    const active = Math.floor(frac * waveBars.length);
+    waveBars.forEach((b, i) => b.classList.toggle("played", i <= active));
+    $("#modalTime").textContent = fmtDur(audio.currentTime) + " / " + fmtDur(audio.duration);
+  }
 
-boot();
+  function setPlayIcon(playing) {
+    $("#modalPlay .play-ico").style.display = playing ? "none" : "";
+    $("#modalPlay .pause-ico").style.display = playing ? "" : "none";
+    $("#modalPlay").setAttribute("aria-label", playing ? "Pause" : "Play");
+  }
+
+  function lyricsHtml(raw) {
+    if (!raw || !String(raw).trim()) return '<p class="field-hint">No lyrics for this track.</p>';
+    const lines = String(raw).split(/\r?\n/);
+    let out = "";
+    for (const lnRaw of lines) {
+      const ln = lnRaw.trim();
+      if (!ln) { out += '<div class="lyrics-line empty"></div>'; continue; }
+      const m = ln.match(/^\[([^\]]+)\]$/);
+      if (m) out += '<div class="lyrics-section">' + esc(m[1]) + "</div>";
+      else out += '<div class="lyrics-line">' + esc(ln) + "</div>";
+    }
+    return out;
+  }
+
+  function openModal(song, autoplay) {
+    lastSongId = song.id;
+    const cover = songCoverUrl(song);
+    const audioUrl = songAudioUrl(song);
+    $("#modalCover").src = cover || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='360'%3E%3Crect width='360' height='360' fill='%23191922'/%3E%3C/svg%3E";
+    $("#modalTitle").textContent = song.title || "Untitled";
+    $("#modalPrompt").textContent = song.prompt || "";
+    $("#modalPrompt").hidden = !song.prompt;
+
+    // meta pills
+    const meta = $("#modalMeta");
+    meta.innerHTML = "";
+    const pills = [];
+    if (song.model) pills.push(["model", song.model]);
+    if (song.seed != null) pills.push(["seed", String(song.seed)]);
+    if (song.duration_seconds != null) pills.push(["duration", fmtDur(song.duration_seconds)]);
+    if (song.created_at) pills.push(["created", String(song.created_at).slice(0, 10)]);
+    pills.forEach(([k, v]) => {
+      meta.insertAdjacentHTML("beforeend", '<span class="meta-pill">' + esc(k) + ' <b>' + esc(v) + "</b></span>");
+    });
+
+    $("#modalLyrics").innerHTML = lyricsHtml(song.lyrics);
+
+    const ext = (audioUrl || "").split(".").pop().toLowerCase();
+    $("#dlWav").href = ext === "mp3" ? "" : audioUrl;
+    $("#dlWav").hidden = ext === "mp3";
+    $("#dlMp3").href = ext === "mp3" ? audioUrl : audioUrl.replace(/\.wav$/i, ".mp3");
+    $("#modalExtend").hidden = !supportsExtend();
+    $("#modalExtend").disabled = !supportsExtend();
+
+    audio.src = audioUrl;
+    setPlayIcon(false);
+    $("#modalTime").textContent = "0:00" + (song.duration_seconds ? " / " + fmtDur(song.duration_seconds) : "");
+
+    modal.hidden = false;
+    document.body.style.overflow = "hidden";
+    requestAnimationFrame(() => { buildWave(); if (waveBars.length) paintWave(); });
+    if (autoplay && audioUrl) {
+      audio.play().then(() => setPlayIcon(true)).catch(() => {});
+    }
+  }
+
+  function closeModal() {
+    audio.pause();
+    modal.hidden = true;
+    document.body.style.overflow = "";
+  }
+
+  $("#modalClose").addEventListener("click", closeModal);
+  $("#modalBackdrop").addEventListener("click", closeModal);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !modal.hidden) closeModal(); });
+
+  $("#modalPlay").addEventListener("click", () => {
+    if (!audio.src) return;
+    if (audio.paused) audio.play().then(() => setPlayIcon(true)).catch(() => {});
+    else { audio.pause(); setPlayIcon(false); }
+  });
+  audio.addEventListener("timeupdate", paintWave);
+  audio.addEventListener("play", () => setPlayIcon(true));
+  audio.addEventListener("pause", () => setPlayIcon(false));
+  audio.addEventListener("ended", () => { setPlayIcon(false); paintWave(); });
+
+  $("#modalRegen").addEventListener("click", async () => {
+    if (!lastSongId) return;
+    const btn = $("#modalRegen");
+    btn.disabled = true;
+    await regenerateSong(lastSongId, null).catch(() => {});
+    btn.disabled = false;
+    closeModal();
+  });
+  $("#modalExtend").addEventListener("click", async () => {
+    if (!lastSongId) return;
+    const btn = $("#modalExtend");
+    btn.disabled = true;
+    await extendSong(lastSongId, null).catch(() => {});
+    btn.disabled = false;
+  });
+
+  /* ---------------- settings ---------------- */
+  function setDot(dotEl, txtEl, stateName, errText) {
+    dotEl.dataset.state = stateName;
+    if (txtEl) {
+      txtEl.hidden = !errText;
+      txtEl.textContent = errText || "";
+    }
+  }
+
+  async function refreshHealth(notify) {
+    ["#healthDotApi", "#healthDotMusic", "#healthDotLlm", "#miniDot"].forEach((s) => { const d = $(s); if (d) d.dataset.state = "busy"; });
+    $("#healthMiniText").textContent = "Checking…";
+    $("#healthMiniErr").hidden = true;
+    try {
+      const h = await api.get("/api/health");
+      applyHealth(h);
+      if (notify) toast("Health check complete");
+    } catch (err) {
+      setDot($("#healthDotApi"), $("#healthErrApi"), "error", err.message);
+      setDot($("#healthDotMusic"), $("#healthErrMusic"), "error", "unreachable — API offline");
+      setDot($("#healthDotLlm"), $("#healthErrLlm"), "error", "unreachable — API offline");
+      setDot($("#miniDot"), null, "error", "");
+      $("#healthMiniText").textContent = "API unreachable";
+      $("#healthMiniErr").hidden = false;
+      $("#healthMiniErr").textContent = err.message;
+      $("#navHealthDot").dataset.state = "error";
+      if (notify) toast("Health check failed", "err");
+    }
+  }
+
+  function applyHealth(h) {
+    const apiState = h && (h.status || h.state) ? "ok" : "ok";
+    setDot($("#healthDotApi"), $("#healthErrApi"), "ok", "");
+    $("#navHealthDot").dataset.state = "ok";
+    $("#miniDot").dataset.state = "ok";
+    $("#healthMiniText").textContent = "API online";
+
+    let anyDown = false;
+    const services = (h && (h.services || h.components)) || {};
+    const music = services.music || services.localai || services.music_model || null;
+    const llm = services.llm || services.llm_model || null;
+    if (music && typeof music === "object") {
+      const ok = music.ok !== false && music.status !== "down" && music.status !== "error";
+      anyDown = anyDown || !ok;
+      setDot($("#healthDotMusic"), $("#healthErrMusic"), ok ? "ok" : "error", ok ? "" : music.error || music.detail || music.message || "unreachable");
+    } else setDot($("#healthDotMusic"), $("#healthErrMusic"), "ok", "");
+    if (llm && typeof llm === "object") {
+      const ok = llm.ok !== false && llm.status !== "down" && llm.status !== "error";
+      anyDown = anyDown || !ok;
+      setDot($("#healthDotLlm"), $("#healthErrLlm"), ok ? "ok" : "error", ok ? "" : llm.error || llm.detail || llm.message || "unreachable");
+    } else setDot($("#healthDotLlm"), $("#healthErrLlm"), "ok", "");
+    if (anyDown) $("#navHealthDot").dataset.state = "error";
+    void apiState;
+  }
+
+  function applyConfig(cfg) {
+    state.config = cfg || {};
+    const c = state.config;
+    const set = (sel, v) => { const n = $(sel); if (n) n.value = v == null ? "" : String(v); };
+    set("#cfgLocalai", c.localai_url || c.music_url || c.localai_endpoint);
+    set("#cfgLlm", c.llm_url || c.llm_endpoint);
+    set("#cfgMusicModel", c.music_model || c.model);
+    set("#cfgLlmModel", c.llm_model);
+    set("#cfgCoverModel", c.cover_model);
+    $("#healthMusicModel").textContent = c.music_model || "";
+    $("#healthLlmModel").textContent = c.llm_model || "";
+    $("#capExtend").textContent = supportsExtend() ? "yes" : "no";
+    $("#capStereo").textContent = c.supports_stereo === false ? "no" : c.supports_stereo ? "yes" : "—";
+    renderLibrary(); // re-render to update Extend visibility
+  }
+
+  async function refreshSettings() {
+    try {
+      const cfg = await api.get("/api/config");
+      applyConfig(cfg);
+    } catch (err) {
+      $("#capExtend").textContent = "unknown";
+      if (state.route === "settings") toast("Config unavailable: " + err.message, "err");
+    }
+    refreshHealth(false);
+  }
+
+  $("#settingsRefresh").addEventListener("click", () => refreshSettings());
+  $("#healthRefresh").addEventListener("click", () => refreshHealth(true));
+
+  /* ---------------- active job recovery ---------------- */
+  async function recoverActive() {
+    try {
+      const data = await api.get("/api/jobs/active");
+      const rows = Array.isArray(data) ? data : (data && (data.jobs || data.items)) || [];
+      if (rows.length) {
+        state.activeJobs = rows;
+        state.activeGroup = (rows[0] && (rows[0].job_group_id || rows[0].group_id)) || state.activeGroup;
+        if (state.activeGroup) {
+          renderProgress();
+          show("progress");
+          startPolling();
+          return true;
+        }
+      }
+    } catch (_) { /* fine */ }
+    return false;
+  }
+
+  /* ---------------- boot ---------------- */
+  async function boot() {
+    let route = "create";
+    try { route = localStorage.getItem("ss_route") || "create"; } catch (_) {}
+    show(route === "progress" ? "create" : route);
+
+    // config + health fire-and-forget
+    refreshSettings();
+    // library
+    await refreshLibrary();
+    // recover in-flight jobs
+    const recovered = await recoverActive();
+    if (recovered) return;
+    if (["create", "library", "settings"].includes(state.route)) refreshHealth(false);
+  }
+
+  boot();
+})();

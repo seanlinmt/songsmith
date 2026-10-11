@@ -14,3 +14,7 @@ data/
 
 # Tooling
 .playwright-mcp/
+
+# Frontend build artifacts
+frontend/node_modules/
+frontend/dist/

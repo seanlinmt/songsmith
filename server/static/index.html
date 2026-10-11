@@ -1,102 +1,330 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="dark">
-  <title>Songsmith — AI song studio</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%238b5cf6'/%3E%3Cstop offset='1' stop-color='%2322d3ee'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath fill='url(%23g)' d='M9 18.5a3.5 3.5 0 1 1-2-3.16V5.2a1 1 0 0 1 .76-.97l9-2.25A1 1 0 0 1 18 2.95v3.1a1 1 0 0 1-.76.97L10 8.72v9.78z'/%3E%3C/svg%3E">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Songsmith — Local AI Song Studio</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%238b5cf6'/%3E%3Cstop offset='1' stop-color='%2322d3ee'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='%23111'/%3E%3Cpath d='M40 14v22.5a7.5 7.5 0 1 0 3 6V24h7v-6h-7v-4z' fill='url(%23g)'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="styles/tokens.css" />
+  <link rel="stylesheet" href="styles/app.css" />
 </head>
 <body>
-  <!-- svg icon sprite -->
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-    <defs>
-      <linearGradient id="icon-grad" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#22d3ee"/>
-      </linearGradient>
-      <symbol id="i-note" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M9 18.5a3.5 3.5 0 1 1-2-3.16V5.2a1 1 0 0 1 .76-.97l9-2.25A1 1 0 0 1 18 2.95v3.1a1 1 0 0 1-.76.97L10 8.72v9.78H9z"/>
-      </symbol>
-      <symbol id="i-sparkle" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2l1.9 5.6L19.5 9.5l-5.6 1.9L12 17l-1.9-5.6L4.5 9.5l5.6-1.9L12 2zm7 12l.95 2.8 2.8.95-2.8.95L19 21.5l-.95-2.8-2.8-.95 2.8-.95L19 14zM5 14l.7 2.05L7.75 16.75 5.7 17.45 5 19.5l-.7-2.05L2.25 16.75l2.05-.7L5 14z"/>
-      </symbol>
-      <symbol id="i-library" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-        <path d="M4 4h6v16H4zM14 4h6v16h-6z"/><path d="M7 8.5h.01M17 8.5h.01"/>
-      </symbol>
-      <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-      </symbol>
-      <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a.7.7 0 0 0 1.07.6l10.2-6.5a.7.7 0 0 0 0-1.2L9.07 4.9A.7.7 0 0 0 8 5.5z"/></symbol>
-      <symbol id="i-pause" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h3.2v14H7zM13.8 5H17v14h-3.2z"/></symbol>
-      <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
-      </symbol>
-      <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-      </symbol>
-      <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6h12z"/>
-      </symbol>
-      <symbol id="i-extend" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 5v14M5 12h14"/>
-      </symbol>
-      <symbol id="i-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
-      </symbol>
-      <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <path d="M18 6L6 18M6 6l12 12"/>
-      </symbol>
-      <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M6 9l6 6 6-6"/>
-      </symbol>
-      <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M20 6L9 17l-5-5"/>
-      </symbol>
-      <symbol id="i-note-ph" viewBox="0 0 24 24" fill="url(#icon-grad)">
-        <path d="M9 18.5a3.5 3.5 0 1 1-2-3.16V5.2a1 1 0 0 1 .76-.97l9-2.25A1 1 0 0 1 18 2.95v3.1a1 1 0 0 1-.76.97L10 8.72v9.78H9z"/>
-      </symbol>
-    </defs>
-  </svg>
+  <div class="bg-orbs" aria-hidden="true">
+    <div class="orb orb-a"></div>
+    <div class="orb orb-b"></div>
+  </div>
+  <div class="noise" aria-hidden="true"></div>
 
-  <div id="app">
-    <nav class="sidebar" aria-label="Primary">
-      <div class="brand">
-        <span class="brand-mark"><svg><use href="#i-note"/></svg></span>
-        <span>Songsmith<small>AI song studio</small></span>
-      </div>
-      <button class="nav-btn" data-nav="create">
-        <svg><use href="#i-sparkle"/></svg><span class="nav-label">Create</span>
-        <span class="nav-dot" title="Generation in progress"></span>
+  <!-- ============ NAV ============ -->
+  <nav class="topnav glass" data-od-id="topnav" aria-label="Main">
+    <a class="brand" href="#" id="brandLink" data-od-id="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 64 64" width="26" height="26" fill="none">
+          <defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--accent)"/><stop offset="1" stop-color="var(--accent-2)"/></linearGradient></defs>
+          <path d="M40 12v24.8a8.8 8.8 0 1 0 3.4 6.95V22.6h8.6V14.7H49V12z" fill="url(#bm)"/>
+        </svg>
+      </span>
+      <span class="brand-name">Songsmith</span>
+      <span class="brand-tag">local studio</span>
+    </a>
+    <div class="nav-tabs" role="tablist">
+      <button class="nav-tab" id="tabCreate" role="tab" data-route="create" aria-selected="false">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        <span>Create</span>
       </button>
-      <button class="nav-btn" data-nav="library">
-        <svg><use href="#i-library"/></svg><span class="nav-label">Library</span>
-        <span class="nav-dot" title="Generation in progress"></span>
+      <button class="nav-tab" id="tabLibrary" role="tab" data-route="library" aria-selected="false">
+        <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M4 4h2.5v16H4zM9 4h2.5v16H9zM15.2 5.1l2.3-.6 4 15-2.3.6z" fill="currentColor"/></svg>
+        <span>Library</span>
+        <span class="nav-badge" id="libraryCount" hidden>0</span>
       </button>
-      <button class="nav-btn" data-nav="settings">
-        <svg><use href="#i-settings"/></svg><span class="nav-label">Settings</span>
-        <span class="nav-dot" title="Generation in progress"></span>
+      <button class="nav-tab" id="tabSettings" role="tab" data-route="settings" aria-selected="false">
+        <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke="currentColor" stroke-width="1.8"/><path d="m19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3.05V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.51 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.24.55.76.94 1.36 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1Z" stroke="currentColor" stroke-width="1.6"/></svg>
+        <span>Settings</span>
+        <span class="status-dot dot-inline" id="navHealthDot" data-state="unknown" title="API health"></span>
       </button>
-      <div class="sidebar-foot">
-        <div>Local-first generation</div>
-        <div class="health-inline" id="nav-health"></div>
-      </div>
-    </nav>
+    </div>
+    <button class="ghost-btn" id="healthRefreshTop" title="Check API health">
+      <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </nav>
 
-    <main class="main" id="main">
-      <section class="view" id="view-create" hidden></section>
-      <section class="view" id="view-library" hidden></section>
-      <section class="view" id="view-settings" hidden></section>
-    </main>
+  <main class="shell" id="shell">
+
+    <!-- ============ CREATE ============ -->
+    <section class="view" id="viewCreate" data-view="create" hidden>
+      <header class="view-head">
+        <h1 class="display">Create a song</h1>
+        <p class="sub">Describe the vibe, pick a style, hit generate. Everything runs on your machine.</p>
+      </header>
+
+      <div class="create-grid">
+        <div class="glass card create-card" data-od-id="create-form">
+          <label class="field-label" for="promptInput">Describe your song</label>
+          <div class="prompt-wrap">
+            <textarea id="promptInput" class="prompt-input" rows="4" maxlength="2000"
+              placeholder="A dreamy synth-pop track about driving through neon city rain at 2am, with a soaring chorus and airy female vocals…"
+              data-od-id="prompt-input"></textarea>
+            <span class="prompt-count" id="promptCount">0 / 2000</span>
+          </div>
+
+          <div class="lyrics-block" id="lyricsBlock">
+            <button class="lyrics-toggle" id="lyricsToggle" aria-expanded="false" data-od-id="lyrics-toggle">
+              <svg class="ico chev" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>Custom lyrics</span>
+              <span class="field-hint">optional — leave off to let the model write them</span>
+            </button>
+            <div class="lyrics-panel" id="lyricsPanel" hidden>
+              <div class="lyrics-panel-inner">
+                <textarea id="lyricsInput" class="lyrics-input" rows="7" maxlength="6000"
+                  placeholder="[Verse]&#10;City lights blur past the glass…&#10;&#10;[Chorus]&#10;We run the night, we own the rain…"
+                  data-od-id="lyrics-input"></textarea>
+                <button class="btn subtle magic-btn" id="writeLyricsBtn" data-od-id="write-lyrics">
+                  <span class="spark" aria-hidden="true">✨</span> Write lyrics for me
+                </button>
+                <p class="field-hint" id="lyricsHint">Use [Verse], [Chorus], [Bridge] tags to structure sections.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <span class="field-label" id="styleLabel">Style</span>
+            <div class="chip-row" id="styleChips" role="group" aria-labelledby="styleLabel" data-od-id="style-chips">
+              <!-- chips injected -->
+            </div>
+          </div>
+
+          <div class="control-row">
+            <div class="control-block" data-od-id="instrumental-toggle">
+              <span class="field-label" id="instLabel">Instrumental</span>
+              <button class="switch" id="instrumentalToggle" role="switch" aria-checked="false" aria-labelledby="instLabel" data-od-id="instrumental-switch">
+                <span class="knob"></span>
+              </button>
+            </div>
+            <div class="control-block control-block-grow" data-od-id="duration-slider">
+              <div class="slider-head">
+                <span class="field-label" id="durLabel">Duration</span>
+                <span class="duration-readout" id="durationReadout">30s</span>
+              </div>
+              <input type="range" id="durationSlider" class="range" min="0" max="3" step="1" value="1" aria-labelledby="durLabel" />
+              <div class="range-marks" id="rangeMarks" aria-hidden="true">
+                <span>15s</span><span>30s</span><span>60s</span><span>120s</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="cta-row">
+            <button class="btn primary btn-generate" id="generateBtn" data-od-id="generate-cta">
+              <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M9 18V6l10.5-2.5v11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.5" cy="18" r="3" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="14.5" r="3" stroke="currentColor" stroke-width="2"/></svg>
+              <span id="generateLabel">Generate</span>
+            </button>
+            <p class="cta-hint" data-od-id="variations-hint">
+              <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M12 3v2m0 14v2m9-9h-2M5 12H3m14.5-6.5-1.4 1.4M7.9 16.1l-1.4 1.4m0-11 1.4 1.4m8.2 8.2 1.4 1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="3.4" stroke="currentColor" stroke-width="1.8"/></svg>
+              2 variations are created per request
+            </p>
+          </div>
+        </div>
+
+        <aside class="create-side">
+          <div class="glass card tip-card" data-od-id="tip-card">
+            <h3>Pro tips</h3>
+            <ul class="tip-list">
+              <li><strong>Be specific.</strong> Mood, tempo, instruments and vocal style all land in the model.</li>
+              <li><strong>Stack tags.</strong> Chips append to your prompt — combine “lo-fi” with “jazz”.</li>
+              <li><strong>Structure lyrics.</strong> [Chorus] tags keep hooks repeating where they should.</li>
+            </ul>
+          </div>
+          <div class="glass card health-mini" data-od-id="health-mini" id="healthMini">
+            <div class="health-mini-row">
+              <span class="status-dot" data-state="unknown" id="miniDot"></span>
+              <span id="healthMiniText">Checking API…</span>
+            </div>
+            <p class="field-hint" id="healthMiniErr" hidden></p>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ============ PROGRESS ============ -->
+    <section class="view" id="viewProgress" data-view="progress" hidden>
+      <header class="view-head">
+        <h1 class="display">Cooking your song</h1>
+        <p class="sub">Two variations are on the way — hang tight.</p>
+      </header>
+      <div class="progress-grid" id="progressGrid" data-od-id="progress-grid"><!-- cards injected --></div>
+      <div class="progress-foot">
+        <button class="ghost-btn" id="cancelPollBtn">Keep this tab, check Library later</button>
+      </div>
+    </section>
+
+    <!-- ============ LIBRARY ============ -->
+    <section class="view" id="viewLibrary" data-view="library" hidden>
+      <header class="view-head head-row">
+        <div>
+          <h1 class="display">Library</h1>
+          <p class="sub"><span id="libraryMeta">Your generated tracks, newest first.</span></p>
+        </div>
+        <button class="ghost-btn" id="libraryRefresh" title="Refresh">
+          <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Refresh
+        </button>
+      </header>
+
+      <div class="song-grid" id="songGrid" data-od-id="song-grid"><!-- cards injected --></div>
+
+      <div class="empty-state glass" id="libraryEmpty" data-od-id="library-empty" hidden>
+        <div class="vinyl" aria-hidden="true">
+          <svg viewBox="0 0 120 120" width="120" height="120">
+            <defs>
+              <linearGradient id="vg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--accent)"/><stop offset="1" stop-color="var(--accent-2)"/></linearGradient>
+            </defs>
+            <circle cx="60" cy="60" r="56" fill="var(--surface-2)" stroke="rgba(255,255,255,.14)"/>
+            <circle cx="60" cy="60" r="46" fill="none" stroke="rgba(255,255,255,.08)"/>
+            <circle cx="60" cy="60" r="38" fill="none" stroke="rgba(255,255,255,.07)"/>
+            <circle cx="60" cy="60" r="30" fill="none" stroke="rgba(255,255,255,.06)"/>
+            <circle cx="60" cy="60" r="18" fill="url(#vg)" opacity=".9"/>
+            <circle cx="60" cy="60" r="4.5" fill="var(--bg)"/>
+          </svg>
+        </div>
+        <h2>Create your first song</h2>
+        <p>Your library is empty. Describe a vibe in Create and Songsmith will spin two variations for you.</p>
+        <button class="btn primary" id="emptyCreateBtn">Go to Create</button>
+      </div>
+    </section>
+
+    <!-- ============ SETTINGS ============ -->
+    <section class="view" id="viewSettings" data-view="settings" hidden>
+      <header class="view-head">
+        <h1 class="display">Settings</h1>
+        <p class="sub">Endpoints are read from the server config. Health checks run live.</p>
+      </header>
+
+      <div class="settings-grid">
+        <div class="glass card settings-card" data-od-id="settings-endpoints">
+          <div class="settings-card-head">
+            <h3>Endpoints &amp; models</h3>
+            <button class="ghost-btn" id="settingsRefresh" data-od-id="settings-refresh">
+              <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Refresh
+            </button>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="cfgLocalai">LocalAI endpoint</label>
+            <input class="input" id="cfgLocalai" type="url" readonly placeholder="—" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="cfgLlm">LLM endpoint</label>
+            <input class="input" id="cfgLlm" type="url" readonly placeholder="—" />
+          </div>
+          <div class="field-grid">
+            <div class="field">
+              <label class="field-label" for="cfgMusicModel">Music model</label>
+              <input class="input" id="cfgMusicModel" type="text" readonly placeholder="—" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="cfgLlmModel">LLM model</label>
+              <input class="input" id="cfgLlmModel" type="text" readonly placeholder="—" />
+            </div>
+          </div>
+          <div class="field">
+            <label class="field-label" for="cfgCoverModel">Cover art model</label>
+            <input class="input" id="cfgCoverModel" type="text" readonly placeholder="—" />
+          </div>
+        </div>
+
+        <div class="glass card settings-card" data-od-id="settings-health">
+          <div class="settings-card-head">
+            <h3>Health</h3>
+            <button class="ghost-btn" id="healthRefresh" data-od-id="health-refresh">
+              <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Run check
+            </button>
+          </div>
+
+          <div class="health-row" data-od-id="health-api">
+            <span class="status-dot" id="healthDotApi" data-state="unknown"></span>
+            <div class="health-body">
+              <div class="health-name">Songsmith API <span class="mono dim">/api/health</span></div>
+              <p class="health-err" id="healthErrApi" hidden></p>
+            </div>
+          </div>
+          <div class="health-row" data-od-id="health-music">
+            <span class="status-dot" id="healthDotMusic" data-state="unknown"></span>
+            <div class="health-body">
+              <div class="health-name">Music generation <span class="mono dim" id="healthMusicModel"></span></div>
+              <p class="health-err" id="healthErrMusic" hidden></p>
+            </div>
+          </div>
+          <div class="health-row" data-od-id="health-llm">
+            <span class="status-dot" id="healthDotLlm" data-state="unknown"></span>
+            <div class="health-body">
+              <div class="health-name">LLM <span class="mono dim" id="healthLlmModel"></span></div>
+              <p class="health-err" id="healthErrLlm" hidden></p>
+            </div>
+          </div>
+
+          <div class="settings-note">
+            <p class="field-hint">Capabilities: extend <span class="mono" id="capExtend">—</span> · stereo <span class="mono" id="capStereo">—</span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ SONG DETAIL MODAL ============ -->
+  <div class="modal-root" id="songModal" hidden data-od-id="song-modal">
+    <div class="modal-backdrop" id="modalBackdrop"></div>
+    <div class="modal glass-strong" role="dialog" aria-modal="true" aria-labelledby="modalTitle" data-od-id="song-modal-panel">
+      <button class="icon-btn modal-close" id="modalClose" aria-label="Close">
+        <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <div class="modal-grid">
+        <div class="modal-media">
+          <img id="modalCover" class="modal-cover" alt="Song cover art" width="360" height="360" />
+        </div>
+        <div class="modal-body">
+          <h2 class="modal-title" id="modalTitle">—</h2>
+          <p class="modal-prompt" id="modalPrompt"></p>
+
+          <div class="player glass" data-od-id="waveform-player">
+            <button class="play-btn" id="modalPlay" aria-label="Play">
+              <svg class="ico play-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+              <svg class="ico pause-ico" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+            </button>
+            <div class="wave" id="modalWave" aria-hidden="true"></div>
+            <span class="player-time mono" id="modalTime">0:00</span>
+          </div>
+          <audio id="modalAudio" preload="metadata"></audio>
+
+          <div class="meta-row" id="modalMeta" data-od-id="modal-meta">
+            <!-- meta pills injected -->
+          </div>
+
+          <div class="lyrics-scroll glass" id="modalLyrics" tabindex="0" data-od-id="modal-lyrics">
+            <p class="field-hint">No lyrics for this track.</p>
+          </div>
+
+          <div class="modal-actions" data-od-id="modal-downloads">
+            <a class="btn subtle" id="dlWav" download>
+              <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 19h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Download WAV
+            </a>
+            <a class="btn subtle" id="dlMp3" download>
+              <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 19h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Download MP3
+            </a>
+            <button class="btn primary" id="modalRegen" data-od-id="modal-regen">Regenerate</button>
+            <button class="btn subtle" id="modalExtend" data-od-id="modal-extend">Extend</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <div id="modal-root"></div>
-  <div id="toast-root" aria-live="polite"></div>
+  <!-- ============ TOASTS ============ -->
+  <div class="toast-root" id="toastRoot" aria-live="polite"></div>
 
-  <script src="/app.js?v=2"></script>
+  <script src="app.js"></script>
 </body>
 </html>
