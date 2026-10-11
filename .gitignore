@@ -1,0 +1,16 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Data (generated audio, covers, DB)
+data/
+
+# Local config
+.env
+
+# macOS
+.DS_Store
+
+# Tooling
+.playwright-mcp/
