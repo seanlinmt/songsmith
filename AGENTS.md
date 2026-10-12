@@ -7,10 +7,14 @@ Single app, ~3.4k lines, no tests/CI/lint config — verification is manual.
 ## Run
 
 ```
-make dev   # creates .venv, installs requirements, starts uvicorn --reload on 127.0.0.1:8788
+make dev   # creates .venv, installs requirements, builds frontend, starts uvicorn --reload on 127.0.0.1:8788
 ```
 
 - UI: http://127.0.0.1:8788 · API health: `GET /api/health` · config: `GET /api/config`
+- `server/web/` (gitignored) holds the built Svelte SPA; the launcher builds it
+  (`npm install && npm run build` in `frontend/`) and skips gracefully if npm is
+  missing. For UI iteration run `npm run dev` in `frontend/` (Vite on :5173,
+  proxies `/api` + `/files` to :8788).
 - Config lives in `.env` (copy `.env.example`). `server/config.py` loads it from
   the project root; defaults exist for everything, so the app boots without it.
 - `data/` (gitignored) holds `songsmith.db` (WAL), `audio/`, `covers/`; served
@@ -32,7 +36,7 @@ make dev   # creates .venv, installs requirements, starts uvicorn --reload on 12
 ## Architecture
 
 - `server/main.py` — entrypoint. Mounts API routers, `/files` static dir, then
-  the UI (`server/static/`) at `/` **last** so `/api` routes win.
+  the built Svelte SPA (`server/web/`) at `/` **last** so `/api` routes win.
 - `server/queue.py` — the pipeline. In-process asyncio workers
   (`MAX_CONCURRENCY = 2`) poll the `jobs` table every 0.5s. Jobs are persisted,
   so state survives reloads, but there is **no in-process resume**: on startup

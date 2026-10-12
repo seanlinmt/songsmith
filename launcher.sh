@@ -42,5 +42,14 @@ fi
 echo "==> Verifying dependencies..."
 .venv/bin/pip install -q -r requirements.txt
 
+# Build the Svelte SPA into server/web/ (skipped if npm is unavailable;
+# server/web/ is gitignored, so this must run at least once after clone).
+if command -v npm >/dev/null 2>&1 && [ -d frontend ]; then
+  echo "==> Building frontend (server/web/)..."
+  (cd frontend && npm install --no-audit --no-fund && npm run build)
+else
+  echo "==> npm not found — skipping frontend build (UI at / will 404)."
+fi
+
 echo "==> Starting Songsmith at http://${HOST}:${PORT}..."
 exec .venv/bin/uvicorn server.main:app --host "${HOST}" --port "${PORT}" --reload
