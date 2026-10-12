@@ -2,59 +2,131 @@
   let {
     config = null,
     health = null,
-    capExtend = '—',
-    capStereo = '—',
     musicModelLabel = '',
     llmModelLabel = '',
     onRefreshSettings,
     onRefreshHealth,
+    onSaveSettings,
   } = $props();
 
   const endpoints = $derived(config && config.endpoints ? config.endpoints : {});
-  const localaiUrl = $derived(endpoints.localai || config?.localai_url || config?.music_url || '');
-  const llmUrl = $derived(endpoints.llm || config?.llm_url || '');
-  const musicModel = $derived(config ? config.music_model || config.model || '' : '');
-  const llmModel = $derived(config ? config.llm_model || '' : '');
-  const coverModel = $derived(config ? config.image_model || config.cover_model || '' : '');
+
+  let localaiUrl = $state('');
+  let llmUrl = $state('');
+  let musicModel = $state('');
+  let llmModel = $state('');
+  let coverModel = $state('');
+  let supportsExtend = $state(false);
+
+  // snapshot the values as loaded from config, so "dirty" means actually changed
+  let baseline = $state({
+    localai_url: '',
+    llm_url: '',
+    music_model: '',
+    llm_model: '',
+    image_model: '',
+    supports_extend: false,
+  });
+
+  // re-sync editable state whenever the config prop changes (e.g. after Refresh)
+  $effect(() => {
+    const next = {
+      localai_url: String(endpoints.localai || config?.localai_url || config?.music_url || ''),
+      llm_url: String(endpoints.llm || config?.llm_url || ''),
+      music_model: String(config ? config.music_model || config.model || '' : ''),
+      llm_model: String(config ? config.llm_model || '' : ''),
+      image_model: String(config ? config.image_model || config.cover_model || '' : ''),
+      supports_extend: config ? !!config.supports_extend : false,
+    };
+    localaiUrl = next.localai_url;
+    llmUrl = next.llm_url;
+    musicModel = next.music_model;
+    llmModel = next.llm_model;
+    coverModel = next.image_model;
+    supportsExtend = next.supports_extend;
+    baseline = next;
+  });
+
+  const dirty = $derived(
+    localaiUrl !== baseline.localai_url ||
+    llmUrl !== baseline.llm_url ||
+    musicModel !== baseline.music_model ||
+    llmModel !== baseline.llm_model ||
+    coverModel !== baseline.image_model ||
+    supportsExtend !== baseline.supports_extend
+  );
+
+  let saving = $state(false);
+  let saveErr = $state('');
+
+  async function save() {
+    if (!dirty || saving || !onSaveSettings) return;
+    const payload = {};
+    if (localaiUrl !== baseline.localai_url) payload.localai_url = localaiUrl;
+    if (llmUrl !== baseline.llm_url) payload.llm_url = llmUrl;
+    if (musicModel !== baseline.music_model) payload.music_model = musicModel;
+    if (llmModel !== baseline.llm_model) payload.llm_model = llmModel;
+    if (coverModel !== baseline.image_model) payload.image_model = coverModel;
+    if (supportsExtend !== baseline.supports_extend) payload.supports_extend = supportsExtend;
+    saving = true;
+    saveErr = '';
+    try {
+      await onSaveSettings(payload);
+      // config prop updates → effect above re-syncs fields and clears dirty
+      if (onRefreshSettings) onRefreshSettings();
+      if (onRefreshHealth) onRefreshHealth();
+    } catch (err) {
+      saveErr = err && err.message ? err.message : 'Save failed';
+    } finally {
+      saving = false;
+    }
+  }
 </script>
 
 <header class="view-head">
   <h1 class="display">Settings</h1>
-  <p class="sub">Endpoints are read from the server config. Health checks run live.</p>
+  <p class="sub">Endpoints and models can be edited here — changes apply immediately and persist. Health checks run live.</p>
 </header>
 
 <div class="settings-grid">
   <div class="glass card settings-card" data-od-id="settings-endpoints">
     <div class="settings-card-head">
       <h3>Endpoints &amp; models</h3>
-      <button class="ghost-btn" id="settingsRefresh" data-od-id="settings-refresh" onclick={onRefreshSettings}>
-        <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Refresh
-      </button>
+      <div class="settings-head-actions">
+        <button class="btn primary settings-save-btn" id="settingsSave" data-od-id="settings-save" onclick={save} disabled={!dirty || saving}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+        <button class="ghost-btn" id="settingsRefresh" data-od-id="settings-refresh" onclick={onRefreshSettings}>
+          <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Refresh
+        </button>
+      </div>
     </div>
 
     <div class="field">
       <label class="field-label" for="cfgLocalai">LocalAI endpoint</label>
-      <input class="input" id="cfgLocalai" type="url" readonly placeholder="—" value={String(localaiUrl)} />
+      <input class="input" id="cfgLocalai" type="url" placeholder="—" bind:value={localaiUrl} />
     </div>
     <div class="field">
       <label class="field-label" for="cfgLlm">LLM endpoint</label>
-      <input class="input" id="cfgLlm" type="url" readonly placeholder="—" value={String(llmUrl)} />
+      <input class="input" id="cfgLlm" type="url" placeholder="—" bind:value={llmUrl} />
     </div>
     <div class="field-grid">
       <div class="field">
         <label class="field-label" for="cfgMusicModel">Music model</label>
-        <input class="input" id="cfgMusicModel" type="text" readonly placeholder="—" value={String(musicModel)} />
+        <input class="input" id="cfgMusicModel" type="text" placeholder="—" bind:value={musicModel} />
       </div>
       <div class="field">
         <label class="field-label" for="cfgLlmModel">LLM model</label>
-        <input class="input" id="cfgLlmModel" type="text" readonly placeholder="—" value={String(llmModel)} />
+        <input class="input" id="cfgLlmModel" type="text" placeholder="—" bind:value={llmModel} />
       </div>
     </div>
     <div class="field">
       <label class="field-label" for="cfgCoverModel">Cover art model</label>
-      <input class="input" id="cfgCoverModel" type="text" readonly placeholder="—" value={String(coverModel)} />
+      <input class="input" id="cfgCoverModel" type="text" placeholder="—" bind:value={coverModel} />
     </div>
+
+    <p class="health-err" id="settingsSaveErr" data-od-id="settings-save-error" hidden={!saveErr}>{saveErr}</p>
   </div>
 
   <div class="glass card settings-card" data-od-id="settings-health">
@@ -89,7 +161,19 @@
     </div>
 
     <div class="settings-note">
-      <p class="field-hint">Capabilities: extend <span class="mono">{capExtend}</span> · stereo <span class="mono">{capStereo}</span></p>
+      <label class="field-hint settings-cap-row" for="cfgExtend" data-od-id="settings-extend">
+        <input class="settings-cap-check" id="cfgExtend" type="checkbox" bind:checked={supportsExtend} />
+        <span class="settings-cap-name">Extend</span>
+        <span class="dim">can continue from an existing clip</span>
+      </label>
     </div>
   </div>
 </div>
+
+<style>
+  .settings-head-actions { display: flex; align-items: center; gap: 8px; }
+  .settings-save-btn { height: 38px; padding: 0 16px; font-size: 13px; border-radius: 10px; }
+  .settings-cap-row { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+  .settings-cap-check { accent-color: var(--accent, #22d3ee); width: 14px; height: 14px; margin: 0; cursor: pointer; }
+  .settings-cap-name { color: var(--text-dim, inherit); }
+</style>

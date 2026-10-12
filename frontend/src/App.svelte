@@ -36,10 +36,6 @@
       ? songs.length + ' track' + (songs.length > 1 ? 's' : '') + ' · newest first'
       : 'Your generated tracks, newest first.'
   );
-  const capExtend = $derived(configFailed ? 'unknown' : config ? (canExtend ? 'yes' : 'no') : '—');
-  const capStereo = $derived(
-    config ? (config.supports_stereo === false ? 'no' : config.supports_stereo ? 'yes' : '—') : '—'
-  );
   const musicModelLabel = $derived(config ? config.music_model || '' : '');
   const llmModelLabel = $derived(config ? config.llm_model || '' : '');
 
@@ -220,6 +216,12 @@
     refreshHealth(false);
   }
 
+  async function saveSettings(payload) {
+    const cfg = await api.send('/api/config', 'PATCH', payload);
+    config = cfg || {};
+    configFailed = false;
+  }
+
   /* ---------------- active job recovery ---------------- */
   async function recoverActive() {
     try {
@@ -305,12 +307,11 @@
     <SettingsView
       config={config}
       health={health}
-      capExtend={capExtend}
-      capStereo={capStereo}
       musicModelLabel={musicModelLabel}
       llmModelLabel={llmModelLabel}
       onRefreshSettings={refreshSettings}
       onRefreshHealth={() => refreshHealth(true)}
+      onSaveSettings={saveSettings}
     />
   </section>
 </main>

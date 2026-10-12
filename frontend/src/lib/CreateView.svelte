@@ -139,7 +139,7 @@
       </button>
       <p class="cta-hint" data-od-id="variations-hint">
         <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M12 3v2m0 14v2m9-9h-2M5 12H3m14.5-6.5-1.4 1.4M7.9 16.1l-1.4 1.4m0-11 1.4 1.4m8.2 8.2 1.4 1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="3.4" stroke="currentColor" stroke-width="1.8"/></svg>
-        2 variations are created per request
+        1 variation is created per request
       </p>
     </div>
   </div>

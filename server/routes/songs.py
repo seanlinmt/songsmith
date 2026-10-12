@@ -153,7 +153,7 @@ def regenerate_song(song_id: str):
 
 @router.post("/{song_id}/extend")
 def extend_song(song_id: str, req: ExtendRequest):
-    if not config.SUPPORTS_EXTEND:
+    if not config.supports_extend():
         raise HTTPException(400, "extend not supported by model")
     src = db.get_song(song_id)
     if src is None:

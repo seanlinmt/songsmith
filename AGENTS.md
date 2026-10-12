@@ -49,8 +49,9 @@ make dev   # creates .venv, installs requirements, builds frontend, starts uvico
 - `server/routes/songs.py` — request models use Suno's snake_case
   `GenParamsSpec` wire names (`tags`, `negative_tags`, `make_instrumental`,
   `batch_size`, …). Keep that contract.
-- Extend is gated on `config.SUPPORTS_EXTEND` (`MUSIC_MODEL == ace-step-turbo`)
-  and currently does full-clip re-extension, not splicing; `continue_at` is
+- Extend is gated on `config.supports_extend()` (override in `data/settings.json`,
+  else `MUSIC_MODEL == ace-step-turbo`) and currently does full-clip re-extension,
+  not splicing; `continue_at` is
   persisted but not yet sent to ACE-Step.
 
 ## Docs
