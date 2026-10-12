@@ -6,7 +6,7 @@ export const PRESETS = [
   { tag: "acoustic folk" }, { tag: "city pop" },
 ];
 
-export const DURATIONS = [15, 30, 60, 120];
+export const DURATIONS = [15, 30, 60, 120, 240];
 
 export const STAGES = [
   { key: "writing lyrics", label: "Writing lyrics" },

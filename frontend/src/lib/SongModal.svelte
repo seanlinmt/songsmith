@@ -2,7 +2,7 @@
   import { songCoverUrl, songAudioUrl } from './songs.js';
   import { fmtDur, clamp } from './format.js';
 
-  let { song = null, autoplay = false, supportsExtend = false, onRegen, onExtend, onClose } = $props();
+  let { song = null, autoplay = false, supportsExtend = false, onRegen, onExtend, onCoverRegen, onClose } = $props();
 
   let audioEl = $state(null);
   let waveEl = $state(null);
@@ -13,6 +13,7 @@
   let timeText = $state('0:00');
   let regenBusy = $state(false);
   let extendBusy = $state(false);
+  let coverBusy = $state(false);
 
   const COVER_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='360'%3E%3Crect width='360' height='360' fill='%23191922'/%3E%3C/svg%3E";
 
@@ -89,6 +90,13 @@
     extendBusy = true;
     try { await onExtend(song.id); } catch (_) {}
     extendBusy = false;
+  }
+
+  async function coverClick() {
+    if (!song) return;
+    coverBusy = true;
+    try { await onCoverRegen(song.id); } catch (_) {}
+    coverBusy = false;
   }
 
   /* body scroll lock while the modal is open */
@@ -178,6 +186,12 @@
             Download MP3
           </a>
           <button class="btn primary" id="modalRegen" data-od-id="modal-regen" onclick={regenClick} disabled={regenBusy}>Regenerate</button>
+          {#if onCoverRegen}
+            <button class="btn subtle" id="modalCoverRegen" data-od-id="modal-cover" onclick={coverClick} disabled={coverBusy}>
+              <svg class="ico" viewBox="0 0 24 24" fill="none" class:spin={coverBusy}><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              New cover
+            </button>
+          {/if}
           <button class="btn subtle" id="modalExtend" data-od-id="modal-extend" onclick={extendClick} disabled={extendBusy || !supportsExtend} hidden={!supportsExtend}>Extend</button>
         </div>
       </div>

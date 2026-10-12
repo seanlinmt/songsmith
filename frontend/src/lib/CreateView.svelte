@@ -2,6 +2,7 @@
   import { api } from './api.js';
   import { toast } from './toast.svelte.js';
   import { PRESETS, DURATIONS } from './songs.js';
+  import { fmtDur } from './format.js';
 
   let { health, onStarted } = $props();
 
@@ -121,12 +122,12 @@
       <div class="control-block control-block-grow" data-od-id="duration-slider">
         <div class="slider-head">
           <span class="field-label" id="durLabel">Duration</span>
-          <span class="duration-readout" id="durationReadout">{DURATIONS[Number(durIdx)]}s</span>
+          <span class="duration-readout" id="durationReadout">{fmtDur(DURATIONS[Number(durIdx)])}</span>
         </div>
-        <input type="range" id="durationSlider" class="range" min="0" max="3" step="1" bind:value={durIdx}
+        <input type="range" id="durationSlider" class="range" min="0" max="4" step="1" bind:value={durIdx}
           style="--fill: {fillPct}%" aria-labelledby="durLabel" />
         <div class="range-marks" id="rangeMarks" aria-hidden="true">
-          <span>15s</span><span>30s</span><span>60s</span><span>120s</span>
+          <span>15s</span><span>30s</span><span>1m</span><span>2m</span><span>4m</span>
         </div>
       </div>
     </div>

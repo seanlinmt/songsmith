@@ -318,6 +318,19 @@ body {
 }
 .song-card:hover .play-overlay, .song-card:focus-within .play-overlay { opacity: 1; }
 .play-overlay .play-btn { pointer-events: auto; }
+.cover-regen {
+  position: absolute; right: 10px; bottom: 10px; z-index: 3;
+  width: 30px; height: 30px; display: grid; place-items: center;
+  border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  background: rgba(0,0,0,.72); color: #fff;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  pointer-events: auto; opacity: 0; transition: opacity .2s, transform .15s;
+}
+.song-card:hover .cover-regen, .song-card:focus-within .cover-regen { opacity: 1; }
+.cover-regen:hover { transform: scale(1.08); }
+.cover-regen:disabled { opacity: 1; cursor: default; }
+.cover-regen .spin { animation: spin 1s linear infinite; }
 .song-title-block { padding: 14px 16px 10px; }
 .song-title { font-size: 15px; font-weight: 700; letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .song-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }

@@ -2,7 +2,7 @@
   import { songCoverUrl, songAudioUrl } from './songs.js';
   import { fmtDur } from './format.js';
 
-  let { song, supportsExtend = false, onOpen, onPlay, onRegen, onExtend, onDelete } = $props();
+  let { song, supportsExtend = false, onOpen, onPlay, onRegen, onExtend, onDelete, onCoverRegen } = $props();
 
   let busy = $state('');
 
@@ -21,6 +21,11 @@
     try { await onExtend(song.id); } finally { busy = ''; }
   }
 
+  async function doCover() {
+    busy = 'cover';
+    try { await onCoverRegen(song.id); } finally { busy = ''; }
+  }
+
   async function doDelete() {
     busy = 'del';
     if (!confirm('Delete ' + displayName + "? This can't be undone.")) { busy = ''; return; }
@@ -35,6 +40,7 @@
       const act = actBtn.dataset.act;
       if (act === 'dl') return; // native download link
       if (act === 'regen') return doRegen();
+      if (act === 'cover') return doCover();
       if (act === 'extend') return doExtend();
       if (act === 'del') return doDelete();
       return;
@@ -56,6 +62,15 @@
       <button class="play-btn" data-play={song.id} aria-label={'Play ' + (song.title || 'song')}>
         <svg class="ico play-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
       </button>
+      {#if onCoverRegen}
+        <button class="cover-regen" data-act="cover" data-id={song.id} title="New cover art"
+          aria-label={'Regenerate cover art for ' + (song.title || 'song')} disabled={busy === 'cover'}>
+          <svg class="ico" viewBox="0 0 24 24" fill="none"
+            class:spin={busy === 'cover'}>
+            <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      {/if}
     </div>
   </div>
   <div class="song-title-block">

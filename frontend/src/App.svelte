@@ -139,6 +139,18 @@
     } catch (err) { toast('Extend failed: ' + err.message, 'err'); }
   }
 
+  async function regenerateCover(id) {
+    try {
+      await api.send('/api/songs/' + encodeURIComponent(id) + '/cover', 'POST', {});
+      await refreshLibrary();
+      if (modalSong && String(modalSong.id) === String(id)) {
+        const fresh = songs.find((s) => String(s.id) === String(id));
+        modalSong = fresh ? { ...fresh } : null;
+      }
+      toast('New cover painted');
+    } catch (err) { toast('Cover failed: ' + err.message, 'err'); }
+  }
+
   /* ---------------- modal ---------------- */
   function openModal(song, autoplay) {
     modalSong = { ...song };
@@ -282,6 +294,7 @@
       onRegen={regenerateSong}
       onExtend={extendSong}
       onDelete={deleteSong}
+      onCoverRegen={regenerateCover}
       onRefresh={refreshLibrary}
       onGoCreate={() => show('create')}
     />
@@ -309,6 +322,7 @@
   supportsExtend={canExtend}
   onRegen={regenerateSong}
   onExtend={extendSong}
+  onCoverRegen={regenerateCover}
   onClose={closeModal}
 />
 

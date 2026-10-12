@@ -10,6 +10,7 @@
     onRegen,
     onExtend,
     onDelete,
+    onCoverRegen,
     onRefresh,
     onGoCreate,
   } = $props();
@@ -36,6 +37,7 @@
       onRegen={onRegen}
       onExtend={onExtend}
       onDelete={onDelete}
+      onCoverRegen={onCoverRegen}
     />
   {/each}
 </div>
