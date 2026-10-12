@@ -12,6 +12,9 @@ Currently, it is configured to run with a [LocalAI](https://localai.io) backend 
 ### Library
 ![Song Library](docs/screenshots/library.png)
 
+### Song detail — playback, lyrics, regenerate & new-cover actions
+![Song detail](docs/screenshots/modal.png)
+
 ### Settings
 ![Settings](docs/screenshots/settings.png)
 

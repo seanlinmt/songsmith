@@ -55,8 +55,9 @@
     {#if cover}
       <img loading="lazy" src={cover} alt="" width="300" height="300"
         onerror={(e) => { e.currentTarget.style.display = 'none'; }} />
+    {:else}
+      <div class="cover-fallback"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" opacity=".5"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="2.4" fill="currentColor"/></svg></div>
     {/if}
-    <div class="cover-fallback"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" opacity=".5"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="2.4" fill="currentColor"/></svg></div>
     <span class="song-duration">{fmtDur(song.duration_seconds)}</span>
     <div class="play-overlay">
       <button class="play-btn" data-play={song.id} aria-label={'Play ' + (song.title || 'song')}>
