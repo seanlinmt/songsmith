@@ -17,4 +17,6 @@ data/
 
 # Frontend build artifacts
 frontend/node_modules/
-frontend/dist/
+
+# Built SPA output (vite build -> server/web)
+server/web/

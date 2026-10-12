@@ -33,6 +33,6 @@ app.include_router(styles.router)
 config.ensure_dirs()
 app.mount("/files", StaticFiles(directory=str(config.DATA_DIR)), name="files")
 
-# Serve the placeholder UI last (so /api wins).
-_static_dir = Path(__file__).parent / "static"
-app.mount("/", StaticFiles(directory=str(_static_dir), html=True), name="static")
+# Serve the built Svelte SPA last (so /api wins).
+_web_dir = Path(__file__).parent / "web"
+app.mount("/", StaticFiles(directory=str(_web_dir), html=True), name="web")
