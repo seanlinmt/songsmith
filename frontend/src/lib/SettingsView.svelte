@@ -10,11 +10,12 @@
     onRefreshHealth,
   } = $props();
 
-  const localaiUrl = $derived(config ? config.localai_url || config.music_url || config.localai_endpoint || '' : '');
-  const llmUrl = $derived(config ? config.llm_url || config.llm_endpoint || '' : '');
+  const endpoints = $derived(config && config.endpoints ? config.endpoints : {});
+  const localaiUrl = $derived(endpoints.localai || config?.localai_url || config?.music_url || '');
+  const llmUrl = $derived(endpoints.llm || config?.llm_url || '');
   const musicModel = $derived(config ? config.music_model || config.model || '' : '');
   const llmModel = $derived(config ? config.llm_model || '' : '');
-  const coverModel = $derived(config ? config.cover_model || '' : '');
+  const coverModel = $derived(config ? config.image_model || config.cover_model || '' : '');
 </script>
 
 <header class="view-head">
