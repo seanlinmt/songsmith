@@ -23,8 +23,8 @@
     nav: 'unknown',
     api: { state: 'unknown', err: '' },
     music: { state: 'unknown', err: '' },
+    image: { state: 'unknown', err: '' },
     llm: { state: 'unknown', err: '' },
-    mini: { state: 'unknown', text: 'Checking API…', err: '' },
   });
 
   let modalSong = $state(null);
@@ -36,8 +36,6 @@
       ? songs.length + ' track' + (songs.length > 1 ? 's' : '') + ' · newest first'
       : 'Your generated tracks, newest first.'
   );
-  const musicModelLabel = $derived(config ? config.music_model || '' : '');
-  const llmModelLabel = $derived(config ? config.llm_model || '' : '');
 
   /* ---------------- routing ---------------- */
   function show(r, opts) {
@@ -116,14 +114,14 @@
     } catch (err) { toast('Delete failed: ' + err.message, 'err'); }
   }
 
-  async function regenerateSong(id) {
+  async function regenerateSong(id, overrides = {}) {
     try {
-      const res = await api.send('/api/songs/' + encodeURIComponent(id) + '/regenerate', 'POST', {});
+      const res = await api.send('/api/songs/' + encodeURIComponent(id) + '/regenerate', 'POST', overrides || {});
       activeGroup = (res && res.job_group_id) || null;
       activeJobs = [];
       show('progress', true);
       startPolling();
-      toast('Regenerating — 2 new variations');
+      toast('Regenerating');
     } catch (err) { toast('Regenerate failed: ' + err.message, 'err'); }
   }
 
@@ -157,26 +155,55 @@
     modalSong = null;
   }
 
+  const variantsForOpenSong = $derived.by(() => {
+    if (!modalSong) return [];
+    const oid = String(modalSong.id);
+    const ogid = modalSong.job_group_id;
+    return songs.filter((s) => {
+      if (String(s.id) === oid) return false;
+      if (s.parent_id != null && String(s.parent_id) === oid) return true;
+      if (ogid != null && s.job_group_id != null && String(s.job_group_id) === String(ogid)) return true;
+      return false;
+    });
+  });
+
+  function playVariant(v) {
+    openModal(v, true);
+  }
+
+  async function deleteVariant(v) {
+    try {
+      await api.send('/api/songs/' + encodeURIComponent(v.id), 'DELETE');
+      songs = songs.filter((s) => String(s.id) !== String(v.id));
+      toast('Deleted');
+    } catch (err) { toast('Delete failed: ' + err.message, 'err'); }
+  }
+
   /* ---------------- settings / health ---------------- */
   function applyHealth(h) {
     health.api = { state: 'ok', err: '' };
     health.nav = 'ok';
-    health.mini.state = 'ok';
-    health.mini.text = 'API online';
 
     let anyDown = false;
-    const services = (h && (h.services || h.components)) || {};
-    const music = services.music || services.localai || services.music_model || null;
-    const llm = services.llm || services.llm_model || null;
+    // /api/health returns {localai: {up}, image: {up}, llm: {up}}
+    const services = h || {};
+    const music = services.localai || null;
+    const image = services.image || null;
+    const llm = services.llm || null;
     if (music && typeof music === 'object') {
-      const ok = music.ok !== false && music.status !== 'down' && music.status !== 'error';
+      const ok = music.up === true;
       anyDown = anyDown || !ok;
-      health.music = { state: ok ? 'ok' : 'error', err: ok ? '' : music.error || music.detail || music.message || 'unreachable' };
+      health.music = { state: ok ? 'ok' : 'error', err: ok ? '' : music.error || 'unreachable' };
     } else health.music = { state: 'ok', err: '' };
-    if (llm && typeof llm === 'object') {
-      const ok = llm.ok !== false && llm.status !== 'down' && llm.status !== 'error';
+    if (image && typeof image === 'object') {
+      const ok = image.up === true;
       anyDown = anyDown || !ok;
-      health.llm = { state: ok ? 'ok' : 'error', err: ok ? '' : llm.error || llm.detail || llm.message || 'unreachable' };
+      health.image = { state: ok ? 'ok' : 'error', err: ok ? '' : image.error || 'unreachable' };
+    } else health.image = { state: 'ok', err: '' };
+    if (llm && typeof llm === 'object') {
+      const ok = llm.up === true;
+      anyDown = anyDown || !ok;
+      health.llm = { state: ok ? 'ok' : 'error', err: ok ? '' : llm.error || 'unreachable' };
     } else health.llm = { state: 'ok', err: '' };
     if (anyDown) health.nav = 'error';
   }
@@ -184,10 +211,8 @@
   async function refreshHealth(notify) {
     health.api = { state: 'busy', err: '' };
     health.music = { state: 'busy', err: '' };
+    health.image = { state: 'busy', err: '' };
     health.llm = { state: 'busy', err: '' };
-    health.mini.state = 'busy';
-    health.mini.text = 'Checking…';
-    health.mini.err = '';
     try {
       const h = await api.get('/api/health');
       applyHealth(h);
@@ -195,13 +220,34 @@
     } catch (err) {
       health.api = { state: 'error', err: err.message };
       health.music = { state: 'error', err: 'unreachable — API offline' };
+      health.image = { state: 'error', err: 'unreachable — API offline' };
       health.llm = { state: 'error', err: 'unreachable — API offline' };
-      health.mini.state = 'error';
-      health.mini.text = 'API unreachable';
-      health.mini.err = err.message;
       health.nav = 'error';
       if (notify) toast('Health check failed', 'err');
     }
+  }
+
+  // Cheap liveness probe — poll every 15s so the nav dot stays current
+  // without user action. A separate from the full (model-listing) check.
+  let healthTimer = null;
+  async function pollHealth() {
+    try {
+      const h = await api.get('/api/health');
+      applyHealth(h);
+    } catch (_) {
+      health.api = { state: 'error', err: 'unreachable' };
+      health.music = { state: 'error', err: 'unreachable — API offline' };
+      health.image = { state: 'error', err: 'unreachable — API offline' };
+      health.llm = { state: 'error', err: 'unreachable — API offline' };
+      health.nav = 'error';
+    }
+  }
+  function startHealthPolling() {
+    if (healthTimer) return;
+    healthTimer = setInterval(pollHealth, 15000);
+  }
+  function stopHealthPolling() {
+    if (healthTimer) { clearInterval(healthTimer); healthTimer = null; }
   }
 
   async function refreshSettings() {
@@ -258,10 +304,14 @@
 
   onMount(() => {
     boot();
+    startHealthPolling();
 
     const onKey = (e) => { if (e.key === 'Escape' && modalSong) closeModal(); };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      stopHealthPolling();
+    };
   });
 </script>
 
@@ -307,8 +357,6 @@
     <SettingsView
       config={config}
       health={health}
-      musicModelLabel={musicModelLabel}
-      llmModelLabel={llmModelLabel}
       onRefreshSettings={refreshSettings}
       onRefreshHealth={() => refreshHealth(true)}
       onSaveSettings={saveSettings}
@@ -321,10 +369,13 @@
   song={modalSong}
   autoplay={modalAutoplay}
   supportsExtend={canExtend}
+  variants={variantsForOpenSong}
   onRegen={regenerateSong}
   onExtend={extendSong}
   onCoverRegen={regenerateCover}
   onClose={closeModal}
+  onPlayVariant={playVariant}
+  onDeleteVariant={deleteVariant}
 />
 
 <!-- ============ TOASTS ============ -->

@@ -24,12 +24,16 @@ log = logging.getLogger("songsmith.music")
 _TIMEOUT = httpx.Timeout(900.0, connect=10.0)
 
 
+def _localai_headers() -> dict:
+    return {"Authorization": f"Bearer {config.MUSIC_API_KEY}"} if config.MUSIC_API_KEY else {}
+
+
 async def check_health() -> dict:
     """Cheap liveness probe for /api/health: does LocalAI answer /v1/models?"""
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(headers=_localai_headers()) as client:
             resp = await client.get(
-                f"{config.LOCALAI_URL}/v1/models", timeout=httpx.Timeout(3.0)
+                f"{config.MUSIC_URL}/v1/models", timeout=httpx.Timeout(3.0)
             )
             resp.raise_for_status()
             models = [m.get("id") for m in resp.json().get("data", [])]
@@ -65,10 +69,10 @@ async def request_ace_step(
     if negative_tags:
         payload["negative_prompt"] = ", ".join(negative_tags)
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(headers=_localai_headers()) as client:
         try:
             resp = await client.post(
-                f"{config.LOCALAI_URL}/v1/sound-generation",
+                f"{config.MUSIC_URL}/v1/sound-generation",
                 json=payload,
                 timeout=_TIMEOUT,
             )
@@ -80,7 +84,7 @@ async def request_ace_step(
             log.warning("sound-generation rejected negative_prompt; retrying without it")
             payload.pop("negative_prompt")
             resp = await client.post(
-                f"{config.LOCALAI_URL}/v1/sound-generation",
+                f"{config.MUSIC_URL}/v1/sound-generation",
                 json=payload,
                 timeout=_TIMEOUT,
             )

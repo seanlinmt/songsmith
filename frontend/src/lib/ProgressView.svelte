@@ -5,9 +5,9 @@
   let { jobs = [], activeGroup = null, onAbandon } = $props();
 
   const cards = $derived.by(() => {
-    let list = jobs && jobs.length ? jobs.slice(0, 2) : null;
+    let list = jobs && jobs.length ? jobs.slice() : null;
     if (!list) {
-      list = [0, 1].map(() => ({ id: null, stage: 'queued' }));
+      list = [0].map(() => ({ id: null, stage: 'queued' }));
       if (!activeGroup) return [];
     }
     return list.map((job, idx) => {
@@ -50,7 +50,7 @@
 
 <header class="view-head">
   <h1 class="display">Cooking your song</h1>
-  <p class="sub">Two variations are on the way — hang tight.</p>
+  <p class="sub">{cards.length === 1 ? 'One variation is on the way — hang tight.' : cards.length + ' variations are on the way — hang tight.'}</p>
 </header>
 <div class="progress-grid" id="progressGrid" data-od-id="progress-grid">
   {#each cards as c, idx (c.job && c.job.id != null ? c.job.id : 'ph-' + idx)}

@@ -32,6 +32,10 @@ def _split_title(content: str) -> tuple[str, str | None]:
     return content, None
 
 
+def _llm_headers() -> dict:
+    return {"Authorization": f"Bearer {config.LLM_API_KEY}"} if config.LLM_API_KEY else {}
+
+
 async def _chat(client: httpx.AsyncClient, messages: list[dict],
                 temperature: float = 0.9) -> str:
     resp = await client.post(
@@ -54,7 +58,7 @@ async def generate_lyrics(prompt: str, tags: list[str] | None = None) -> tuple[s
     if tags:
         user_content = f"{prompt}\n\nStyle/genre: {', '.join(tags)}"
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(headers=_llm_headers()) as client:
             content = await _chat(client, [
                 {"role": "system", "content": LYRICS_SYSTEM},
                 {"role": "user", "content": user_content},
@@ -78,7 +82,7 @@ async def generate_title(prompt: str, lyrics: str,
     if tags:
         content = f"{content}\n\nStyle/genre: {', '.join(tags)}"
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(headers=_llm_headers()) as client:
             return await _chat(client, [
                 {"role": "system", "content": TITLE_SYSTEM},
                 {"role": "user", "content": content},
@@ -86,6 +90,34 @@ async def generate_title(prompt: str, lyrics: str,
     except Exception:
         log.exception("title generation failed")
         return None
+
+
+ENHANCE_SYSTEM = (
+    "You rewrite short song descriptions into vivid scene-setting descriptions "
+    "for a text-to-music model. Write 2-4 sentences describing the song's "
+    "mood, genre, instrumentation, tempo, and production style. This is a "
+    "description, NOT lyrics: no titles, no quoted text, no section tags, no "
+    "explanation. Reply with ONLY the description."
+)
+
+
+async def enhance_description(prompt: str,
+                              tags: list[str] | None = None) -> str | None:
+    """Expand a short user description into a rich prompt for the music model."""
+    user_content = prompt
+    if tags:
+        user_content = f"{prompt}\n\nStyle/genre: {', '.join(tags)}"
+    try:
+        async with httpx.AsyncClient(headers=_llm_headers()) as client:
+            content = await _chat(client, [
+                {"role": "system", "content": ENHANCE_SYSTEM},
+                {"role": "user", "content": user_content},
+            ], temperature=0.7)
+        return " ".join(content.strip().strip('"').split()) or None
+    except httpx.TimeoutException as exc:
+        raise RuntimeError("LLM busy: request timed out, try again shortly") from exc
+    except httpx.ConnectError as exc:
+        raise RuntimeError(f"LLM unreachable at {config.LLM_URL}") from exc
 
 
 STYLE_SYSTEM = (
@@ -124,7 +156,7 @@ async def expand_style(prompt: str, tags: list[str]) -> tuple[str, list[str]]:
     """
     fallback = (", ".join(tags), [])
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(headers=_llm_headers()) as client:
             content = await _chat(client, [
                 {"role": "system", "content": STYLE_SYSTEM},
                 {"role": "user", "content": f"Song description: {prompt}\n\nStyle tags: {', '.join(tags)}"},
@@ -160,7 +192,7 @@ async def describe_cover_scene(lyrics: str | None, prompt: str | None,
     if tags:
         parts.append(f"Style: {', '.join(tags)}")
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(headers=_llm_headers()) as client:
             content = await _chat(client, [
                 {"role": "system", "content": COVER_SCENE_SYSTEM},
                 {"role": "user", "content": "\n\n".join(parts)},
@@ -174,7 +206,7 @@ async def describe_cover_scene(lyrics: str | None, prompt: str | None,
 
 async def check_health() -> dict:
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(headers=_llm_headers()) as client:
             resp = await client.get(f"{config.LLM_URL}/v1/models", timeout=3.0)
         resp.raise_for_status()
         data = resp.json()

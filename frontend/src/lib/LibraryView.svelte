@@ -58,7 +58,7 @@
       </svg>
     </div>
     <h2>Create your first song</h2>
-    <p>Your library is empty. Describe a vibe in Create and Songsmith will spin two variations for you.</p>
+    <p>Your library is empty. Describe a vibe in Create and Songsmith will spin up a song for you.</p>
     <button class="btn primary" id="emptyCreateBtn" onclick={onGoCreate}>Go to Create</button>
   </div>
 {/if}

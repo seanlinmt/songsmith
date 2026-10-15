@@ -1,60 +1,86 @@
-"""Configuration loaded from .env via python-dotenv, with optional overrides.
+"""Configuration: code defaults + data/settings.json overrides.
 
-Runtime overrides live in DATA_DIR/"settings.json" (written by PATCH /api/config).
-They are applied at import and can be mutated live via the module attributes.
+All service settings (endpoints, models, API keys, capabilities) are edited
+via the Settings page (PATCH /api/config) and persisted to
+DATA_DIR/"settings.json". Only process-bootstrap values (HOST, PORT,
+DATA_DIR) still come from the environment — they are needed before the
+server (and therefore the Settings page) can run.
 """
 import json
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-# Load .env from the project root (parent of server/).
+# Bootstrap (not exposed on the Settings page — the server must be running
+# to serve it). Plain environment variables; .env is no longer auto-loaded.
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(_PROJECT_ROOT / ".env")
 
 
 def _get(key: str, default: str) -> str:
     return os.environ.get(key, default).strip()
 
 
-def _strip_url(url: str) -> str:
-    return url.strip().rstrip("/")
-
-
-LOCALAI_URL = _get("LOCALAI_URL", "http://127.0.0.1:7777").rstrip("/")
-LLM_URL = _get("LLM_URL", "http://127.0.0.1:18888").rstrip("/")
-LLM_MODEL = _get("LLM_MODEL", "GLM-5.3-Flash-EXL3")
-MUSIC_MODEL = _get("MUSIC_MODEL", "ace-step-turbo")
-IMAGE_MODEL = _get("IMAGE_MODEL", "flux.2-klein-4b")
 DATA_DIR = Path(_get("DATA_DIR", "data"))
 if not DATA_DIR.is_absolute():
     DATA_DIR = _PROJECT_ROOT / DATA_DIR
 
+
+def _strip_url(url: str) -> str:
+    return url.strip().rstrip("/")
+
+
+# ---- code defaults (settings.json takes precedence) ----
+DEFAULTS = {
+    "localai_url": "http://127.0.0.1:7777",
+    "llm_url": "http://127.0.0.1:18888",
+    "llm_model": "GLM-5.3-Flash-EXL3",
+    "music_model": "ace-step-turbo",
+    "image_model": "flux.2-klein-4b",
+}
+
+# Live module state, seeded from DEFAULTS then overlaid with settings.json.
+LOCALAI_URL = DEFAULTS["localai_url"]
+# Per-service endpoints fall back to the shared LocalAI URL when unset.
+MUSIC_URL = LOCALAI_URL
+IMAGE_URL = LOCALAI_URL
+LLM_URL = DEFAULTS["llm_url"]
+LLM_MODEL = DEFAULTS["llm_model"]
+MUSIC_MODEL = DEFAULTS["music_model"]
+IMAGE_MODEL = DEFAULTS["image_model"]
+# API keys: music/image fall back to the shared LocalAI key when unset.
+LOCALAI_API_KEY = ""
+MUSIC_API_KEY = ""
+IMAGE_API_KEY = ""
+LLM_API_KEY = ""
+
 HOST = _get("HOST", "127.0.0.1")
 PORT = int(_get("PORT", "8788"))
 
-# Keys that may be overridden via settings.json (supports_extend: bool | null).
-_OVERRIDE_KEYS = ("localai_url", "llm_url", "llm_model", "music_model", "image_model")
-
-# Cached supports_extend override: None means "no override, derive from model".
-_SUPPORTS_EXTEND_OVERRIDE: bool | None = None
-
 
 def _apply_overrides(settings: dict) -> None:
-    """Overlay settings.json values onto module constants. Null/missing = no override."""
-    global LOCALAI_URL, LLM_URL, LLM_MODEL, MUSIC_MODEL, IMAGE_MODEL
+    """Overlay settings.json values onto module state. Null/missing = default."""
+    global LOCALAI_URL, MUSIC_URL, IMAGE_URL, LLM_URL
+    global LLM_MODEL, MUSIC_MODEL, IMAGE_MODEL
+    global LOCALAI_API_KEY, MUSIC_API_KEY, IMAGE_API_KEY, LLM_API_KEY
     global _SUPPORTS_EXTEND_OVERRIDE
-    if "localai_url" in settings and settings["localai_url"] is not None:
-        LOCALAI_URL = _strip_url(str(settings["localai_url"]))
-    if "llm_url" in settings and settings["llm_url"] is not None:
-        LLM_URL = _strip_url(str(settings["llm_url"]))
-    if "llm_model" in settings and settings["llm_model"] is not None:
-        LLM_MODEL = str(settings["llm_model"]).strip()
-    if "music_model" in settings and settings["music_model"] is not None:
-        MUSIC_MODEL = str(settings["music_model"]).strip()
-    if "image_model" in settings and settings["image_model"] is not None:
-        IMAGE_MODEL = str(settings["image_model"]).strip()
+
+    def _pick(key: str, default: str) -> str:
+        value = settings.get(key)
+        return _strip_url(str(value)) if value else default
+
+    LOCALAI_URL = _pick("localai_url", DEFAULTS["localai_url"])
+    MUSIC_URL = _pick("music_url", LOCALAI_URL)
+    IMAGE_URL = _pick("image_url", LOCALAI_URL)
+    LLM_URL = _pick("llm_url", DEFAULTS["llm_url"])
+
+    LLM_MODEL = str(settings.get("llm_model") or DEFAULTS["llm_model"]).strip()
+    MUSIC_MODEL = str(settings.get("music_model") or DEFAULTS["music_model"]).strip()
+    IMAGE_MODEL = str(settings.get("image_model") or DEFAULTS["image_model"]).strip()
+
+    LOCALAI_API_KEY = str(settings.get("localai_api_key") or "").strip()
+    MUSIC_API_KEY = str(settings.get("music_api_key") or LOCALAI_API_KEY).strip()
+    IMAGE_API_KEY = str(settings.get("image_api_key") or LOCALAI_API_KEY).strip()
+    LLM_API_KEY = str(settings.get("llm_api_key") or "").strip()
+
     if "supports_extend" in settings:
         value = settings["supports_extend"]
         _SUPPORTS_EXTEND_OVERRIDE = None if value is None else bool(value)

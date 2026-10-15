@@ -2,58 +2,72 @@
   let {
     config = null,
     health = null,
-    musicModelLabel = '',
-    llmModelLabel = '',
     onRefreshSettings,
     onRefreshHealth,
     onSaveSettings,
   } = $props();
 
   const endpoints = $derived(config && config.endpoints ? config.endpoints : {});
+  const apiKeys = $derived(config && config.api_keys ? config.api_keys : {});
 
-  let localaiUrl = $state('');
+  let musicUrl = $state('');
+  let imageUrl = $state('');
   let llmUrl = $state('');
   let musicModel = $state('');
   let llmModel = $state('');
   let coverModel = $state('');
-  let supportsExtend = $state(false);
+  let musicKey = $state('');
+  let imageKey = $state('');
+  let llmKey = $state('');
 
   // snapshot the values as loaded from config, so "dirty" means actually changed
   let baseline = $state({
-    localai_url: '',
+    music_url: '',
+    image_url: '',
     llm_url: '',
     music_model: '',
     llm_model: '',
     image_model: '',
-    supports_extend: false,
+    music_api_key: '',
+    image_api_key: '',
+    llm_api_key: '',
   });
 
   // re-sync editable state whenever the config prop changes (e.g. after Refresh)
   $effect(() => {
     const next = {
-      localai_url: String(endpoints.localai || config?.localai_url || config?.music_url || ''),
+      // legacy configs only had `endpoints.localai`; music/image fall back to it
+      music_url: String(endpoints.music || endpoints.localai || config?.music_url || config?.localai_url || ''),
+      image_url: String(endpoints.image || endpoints.localai || config?.image_url || config?.localai_url || ''),
       llm_url: String(endpoints.llm || config?.llm_url || ''),
       music_model: String(config ? config.music_model || config.model || '' : ''),
       llm_model: String(config ? config.llm_model || '' : ''),
       image_model: String(config ? config.image_model || config.cover_model || '' : ''),
-      supports_extend: config ? !!config.supports_extend : false,
+      music_api_key: String(apiKeys.music || ''),
+      image_api_key: String(apiKeys.image || ''),
+      llm_api_key: String(apiKeys.llm || ''),
     };
-    localaiUrl = next.localai_url;
+    musicUrl = next.music_url;
+    imageUrl = next.image_url;
     llmUrl = next.llm_url;
     musicModel = next.music_model;
     llmModel = next.llm_model;
     coverModel = next.image_model;
-    supportsExtend = next.supports_extend;
-    baseline = next;
-  });
+    musicKey = next.music_api_key;
+    imageKey = next.image_api_key;
+    llmKey = next.llm_api_key;
+    baseline = next;  });
 
   const dirty = $derived(
-    localaiUrl !== baseline.localai_url ||
+    musicUrl !== baseline.music_url ||
+    imageUrl !== baseline.image_url ||
     llmUrl !== baseline.llm_url ||
     musicModel !== baseline.music_model ||
     llmModel !== baseline.llm_model ||
     coverModel !== baseline.image_model ||
-    supportsExtend !== baseline.supports_extend
+    musicKey !== baseline.music_api_key ||
+    imageKey !== baseline.image_api_key ||
+    llmKey !== baseline.llm_api_key
   );
 
   let saving = $state(false);
@@ -62,12 +76,18 @@
   async function save() {
     if (!dirty || saving || !onSaveSettings) return;
     const payload = {};
-    if (localaiUrl !== baseline.localai_url) payload.localai_url = localaiUrl;
+    if (musicUrl !== baseline.music_url) payload.music_url = musicUrl;
+    if (imageUrl !== baseline.image_url) payload.image_url = imageUrl;
     if (llmUrl !== baseline.llm_url) payload.llm_url = llmUrl;
     if (musicModel !== baseline.music_model) payload.music_model = musicModel;
     if (llmModel !== baseline.llm_model) payload.llm_model = llmModel;
     if (coverModel !== baseline.image_model) payload.image_model = coverModel;
-    if (supportsExtend !== baseline.supports_extend) payload.supports_extend = supportsExtend;
+    if (musicKey !== baseline.music_api_key) payload.music_api_key = musicKey;
+    if (imageKey !== baseline.image_api_key) payload.image_api_key = imageKey;
+    if (llmKey !== baseline.llm_api_key) payload.llm_api_key = llmKey;
+    if (musicModel !== baseline.music_model) payload.music_model = musicModel;
+    if (llmModel !== baseline.llm_model) payload.llm_model = llmModel;
+    if (coverModel !== baseline.image_model) payload.image_model = coverModel;
     saving = true;
     saveErr = '';
     try {
@@ -85,7 +105,7 @@
 
 <header class="view-head">
   <h1 class="display">Settings</h1>
-  <p class="sub">Endpoints and models can be edited here — changes apply immediately and persist. Health checks run live.</p>
+  <p class="sub">Endpoints and models can be edited here — changes apply immediately and persist. Health is polled automatically every 15 seconds.</p>
 </header>
 
 <div class="settings-grid">
@@ -103,77 +123,62 @@
       </div>
     </div>
 
-    <div class="field">
-      <label class="field-label" for="cfgLocalai">LocalAI endpoint</label>
-      <input class="input" id="cfgLocalai" type="url" placeholder="—" bind:value={localaiUrl} />
-    </div>
-    <div class="field">
-      <label class="field-label" for="cfgLlm">LLM endpoint</label>
-      <input class="input" id="cfgLlm" type="url" placeholder="—" bind:value={llmUrl} />
-    </div>
-    <div class="field-grid">
+    <div class="field-grid cols3">
+      <div class="field">
+        <label class="field-label" for="cfgLocalai"><span class="status-dot dot-inline" data-state={health?.music?.state || 'unknown'}></span> Music endpoint</label>
+        <input class="input" id="cfgLocalai" type="url" placeholder="—" bind:value={musicUrl} />
+      </div>
       <div class="field">
         <label class="field-label" for="cfgMusicModel">Music model</label>
         <input class="input" id="cfgMusicModel" type="text" placeholder="—" bind:value={musicModel} />
       </div>
       <div class="field">
-        <label class="field-label" for="cfgLlmModel">LLM model</label>
-        <input class="input" id="cfgLlmModel" type="text" placeholder="—" bind:value={llmModel} />
+        <label class="field-label" for="cfgMusicKey">API key</label>
+        <input class="input" id="cfgMusicKey" type="password" placeholder="optional" autocomplete="off" bind:value={musicKey} />
       </div>
     </div>
-    <div class="field">
-      <label class="field-label" for="cfgCoverModel">Cover art model</label>
-      <input class="input" id="cfgCoverModel" type="text" placeholder="—" bind:value={coverModel} />
+    <div class="field-grid cols3">
+      <div class="field">
+        <label class="field-label" for="cfgImageUrl"><span class="status-dot dot-inline" data-state={health?.image?.state || 'unknown'}></span> Cover art endpoint</label>
+        <input class="input" id="cfgImageUrl" type="url" placeholder="—" bind:value={imageUrl} />
+      </div>
+      <div class="field">
+        <label class="field-label" for="cfgCoverModel">Cover art model</label>
+        <input class="input" id="cfgCoverModel" type="text" placeholder="—" bind:value={coverModel} />
+      </div>
+      <div class="field">
+        <label class="field-label" for="cfgImageKey">API key</label>
+        <input class="input" id="cfgImageKey" type="password" placeholder="optional" autocomplete="off" bind:value={imageKey} />
+      </div>
     </div>
-
-    <p class="health-err" id="settingsSaveErr" data-od-id="settings-save-error" hidden={!saveErr}>{saveErr}</p>
-  </div>
-
-  <div class="glass card settings-card" data-od-id="settings-health">
-    <div class="settings-card-head">
-      <h3>Health</h3>
-      <button class="ghost-btn" id="healthRefresh" data-od-id="health-refresh" onclick={onRefreshHealth}>
-        <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Run check
-      </button>
+    <div class="field-grid cols3">
+      <div class="field">
+        <label class="field-label" for="cfgLlm"><span class="status-dot dot-inline" data-state={health?.llm?.state || 'unknown'}></span> Lyrics endpoint</label>
+        <input class="input" id="cfgLlm" type="url" placeholder="—" bind:value={llmUrl} />
+      </div>
+      <div class="field">
+        <label class="field-label" for="cfgLlmModel">Lyrics model</label>
+        <input class="input" id="cfgLlmModel" type="text" placeholder="—" bind:value={llmModel} />
+      </div>
+      <div class="field">
+        <label class="field-label" for="cfgLlmKey">API key</label>
+        <input class="input" id="cfgLlmKey" type="password" placeholder="optional" autocomplete="off" bind:value={llmKey} />
+      </div>
     </div>
 
     <div class="health-row" data-od-id="health-api">
-      <span class="status-dot" data-state={health.api.state}></span>
+      <span class="status-dot" data-state={health?.api?.state || 'unknown'}></span>
       <div class="health-body">
         <div class="health-name">Songsmith API <span class="mono dim">/api/health</span></div>
-        <p class="health-err" hidden={!health.api.err}>{health.api.err}</p>
+        <p class="health-err" hidden={!health?.api?.err}>{health?.api?.err}</p>
       </div>
     </div>
-    <div class="health-row" data-od-id="health-music">
-      <span class="status-dot" data-state={health.music.state}></span>
-      <div class="health-body">
-        <div class="health-name">Music generation <span class="mono dim">{musicModelLabel}</span></div>
-        <p class="health-err" hidden={!health.music.err}>{health.music.err}</p>
-      </div>
-    </div>
-    <div class="health-row" data-od-id="health-llm">
-      <span class="status-dot" data-state={health.llm.state}></span>
-      <div class="health-body">
-        <div class="health-name">LLM <span class="mono dim">{llmModelLabel}</span></div>
-        <p class="health-err" hidden={!health.llm.err}>{health.llm.err}</p>
-      </div>
-    </div>
-
-    <div class="settings-note">
-      <label class="field-hint settings-cap-row" for="cfgExtend" data-od-id="settings-extend">
-        <input class="settings-cap-check" id="cfgExtend" type="checkbox" bind:checked={supportsExtend} />
-        <span class="settings-cap-name">Extend</span>
-        <span class="dim">can continue from an existing clip</span>
-      </label>
-    </div>
+    <p class="health-err" id="settingsSaveErr" data-od-id="settings-save-error" hidden={!saveErr}>{saveErr}</p>
   </div>
 </div>
 
 <style>
   .settings-head-actions { display: flex; align-items: center; gap: 8px; }
   .settings-save-btn { height: 38px; padding: 0 16px; font-size: 13px; border-radius: 10px; }
-  .settings-cap-row { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
-  .settings-cap-check { accent-color: var(--accent, #22d3ee); width: 14px; height: 14px; margin: 0; cursor: pointer; }
-  .settings-cap-name { color: var(--text-dim, inherit); }
+  .field-grid.cols3 { grid-template-columns: 1.4fr 1fr 1fr; }
 </style>

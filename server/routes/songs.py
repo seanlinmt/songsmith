@@ -6,7 +6,7 @@ import re
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -50,7 +50,7 @@ def _song_public(song: dict) -> dict:
 
 class SongCreate(BaseModel):
     prompt: str
-    lyrics: str = ""
+    lyrics: str | None = ""  # null accepted (Suno wire contract); coerced to ''
     tags: list[str] = Field(default_factory=list)
     negative_tags: list[str] = Field(default_factory=list)
     instrumental: bool = False
@@ -62,13 +62,23 @@ class SongCreate(BaseModel):
     style_influence: float | None = None
     weirdness: float | None = None
     variety: int | None = None
+    style_prompt: str | None = None
 
 
 class ExtendRequest(BaseModel):
-    duration_seconds: int
+    duration_seconds: int | None = None  # None -> inherit parent's duration
     continue_at: int | None = None  # seconds into the parent to continue from
     infill_start_s: int | None = None
     infill_end_s: int | None = None
+
+
+class RegenerateRequest(BaseModel):
+    prompt: str | None = None
+    lyrics: str | None = None
+    tags: list[str] | None = None
+    negative_tags: list[str] | None = None
+    instrumental: bool | None = None
+    duration_seconds: int | None = None
 
 
 @router.post("")
@@ -85,10 +95,11 @@ def create_song(req: SongCreate):
             " style_prompt, vocal_gender, style_influence, weirdness, variety, continue_at,"
             " instrumental, model, seed, duration_seconds, status,"
             " audio_path, cover_path, error, job_group_id, parent_id, kind)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'queued', NULL, NULL, NULL, ?, NULL, 'song')",
-            (song_id, now, req.title or '', req.prompt, req.lyrics,
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'queued', NULL, NULL, NULL, ?, NULL, 'song')",
+            (song_id, now, req.title or '', req.prompt, req.lyrics or '',
              json.dumps(req.tags), json.dumps(req.negative_tags),
-             req.vocal_gender, req.style_influence, req.weirdness, req.variety,
+             req.style_prompt, req.vocal_gender, req.style_influence,
+             req.weirdness, req.variety,
              int(instrumental),
              config.MUSIC_MODEL, seed, req.duration_seconds, group_id),
         )
@@ -110,6 +121,19 @@ def get_song(song_id: str):
     return _song_public(song)
 
 
+@router.get("/{song_id}/variants")
+def list_song_variants(song_id: str):
+    song = db.get_song(song_id)
+    if song is None:
+        raise HTTPException(404, "song not found")
+    rows = db.query_all(
+        "SELECT * FROM songs WHERE (parent_id = ? OR job_group_id = ?) AND id != ?"
+        " ORDER BY created_at ASC, id ASC",
+        (song_id, song.get("job_group_id"), song_id),
+    )
+    return [_song_public(r) for r in rows]
+
+
 @router.delete("/{song_id}")
 def delete_song(song_id: str):
     song = db.get_song(song_id)
@@ -126,7 +150,7 @@ def delete_song(song_id: str):
 
 
 @router.post("/{song_id}/regenerate")
-def regenerate_song(song_id: str):
+def regenerate_song(song_id: str, req: RegenerateRequest = Body(default=RegenerateRequest())):
     src = db.get_song(song_id)
     if src is None:
         raise HTTPException(404, "song not found")
@@ -134,18 +158,24 @@ def regenerate_song(song_id: str):
     new_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     seed = random.randint(0, 2**31 - 1)
+    prompt = req.prompt if req and req.prompt is not None else src["prompt"]
+    lyrics = req.lyrics if req and req.lyrics is not None else src["lyrics"]
+    tags = req.tags if req and req.tags is not None else src["tags"]
+    negative_tags = req.negative_tags if req and req.negative_tags is not None else src.get("negative_tags") or []
+    instrumental = req.instrumental if req and req.instrumental is not None else int(src["instrumental"])
+    duration_seconds = req.duration_seconds or src.get("duration_seconds") or 60
     db.execute(
         "INSERT INTO songs (id, created_at, title, prompt, lyrics, tags, negative_tags,"
         " style_prompt, vocal_gender, style_influence, weirdness, variety, continue_at,"
         " instrumental, model, seed, duration_seconds, status,"
         " audio_path, cover_path, error, job_group_id, parent_id, kind)"
         " VALUES (?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'queued', NULL, NULL, NULL, ?, NULL, 'song')",
-        (new_id, now, src["prompt"], src["lyrics"], json.dumps(src["tags"]),
-         json.dumps(src.get("negative_tags") or []), src.get("style_prompt"),
+        (new_id, now, prompt, lyrics, json.dumps(tags),
+         json.dumps(negative_tags), src.get("style_prompt"),
          src.get("vocal_gender"), src.get("style_influence"),
          src.get("weirdness"), src.get("variety"),
-         int(src["instrumental"]), src.get("model") or config.MUSIC_MODEL,
-         seed, src.get("duration_seconds") or 60, group_id),
+         instrumental, src.get("model") or config.MUSIC_MODEL,
+         seed, duration_seconds, group_id),
     )
     create_job(new_id, group_id, "regenerate")
     return {"job_group_id": group_id, "songs": [{"id": new_id, "job_group_id": group_id, "status": "queued"}]}
@@ -158,6 +188,8 @@ def extend_song(song_id: str, req: ExtendRequest):
     src = db.get_song(song_id)
     if src is None:
         raise HTTPException(404, "song not found")
+    duration_seconds = req.duration_seconds if req.duration_seconds is not None \
+        else src.get("duration_seconds")
     group_id = str(uuid.uuid4())
     new_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -174,7 +206,7 @@ def extend_song(song_id: str, req: ExtendRequest):
          src.get("weirdness"), src.get("variety"),
          req.continue_at if req.continue_at is not None else src.get("continue_at"),
          int(src["instrumental"]), src.get("model") or config.MUSIC_MODEL,
-         seed, req.duration_seconds, group_id, song_id),
+         seed, duration_seconds, group_id, song_id),
     )
     create_job(new_id, group_id, "extend")
     return {"job_group_id": group_id, "songs": [{"id": new_id, "job_group_id": group_id, "status": "queued"}]}

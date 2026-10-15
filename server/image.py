@@ -11,6 +11,23 @@ log = logging.getLogger("songsmith.image")
 _TIMEOUT = httpx.Timeout(300.0, connect=10.0)
 
 
+def _localai_headers() -> dict:
+    return {"Authorization": f"Bearer {config.IMAGE_API_KEY}"} if config.IMAGE_API_KEY else {}
+
+
+async def check_health() -> dict:
+    """Cheap liveness probe for /api/health: does the image endpoint answer?"""
+    try:
+        async with httpx.AsyncClient(headers=_localai_headers()) as client:
+            resp = await client.get(
+                f"{config.IMAGE_URL}/v1/models", timeout=httpx.Timeout(3.0)
+            )
+            resp.raise_for_status()
+            return {"up": True}
+    except Exception as exc:
+        return {"up": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
 async def generate_cover(out_path, title: str | None = None,
                          tags: list[str] | None = None,
                          lyrics: str | None = None,
@@ -65,9 +82,9 @@ async def generate_cover(out_path, title: str | None = None,
         payload["negative_prompt"] = ("text, words, letters, typography, "
                                       "watermarks, logos, gibberish text, "
                                       "misspelled words")
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(headers=_localai_headers()) as client:
         resp = await client.post(
-            f"{config.LOCALAI_URL}/v1/images/generations",
+            f"{config.IMAGE_URL}/v1/images/generations",
             json=payload,
             timeout=_TIMEOUT,
         )
@@ -87,7 +104,7 @@ async def generate_cover(out_path, title: str | None = None,
         if url:
             # url may be relative to LOCALAI_URL
             if not str(url).startswith(("http://", "https://")):
-                url = f"{config.LOCALAI_URL}/{str(url).lstrip('/')}"
+                url = f"{config.IMAGE_URL}/{str(url).lstrip('/')}"
             img = await client.get(url, timeout=_TIMEOUT)
             img.raise_for_status()
             out_path.write_bytes(img.content)

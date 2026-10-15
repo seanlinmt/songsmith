@@ -2,7 +2,7 @@
   import { songCoverUrl, songAudioUrl } from './songs.js';
   import { fmtDur, clamp } from './format.js';
 
-  let { song = null, autoplay = false, supportsExtend = false, onRegen, onExtend, onCoverRegen, onClose } = $props();
+  let { song = null, autoplay = false, supportsExtend = false, onRegen, onExtend, onCoverRegen, onClose, variants = [], onPlayVariant, onDeleteVariant } = $props();
 
   let audioEl = $state(null);
   let waveEl = $state(null);
@@ -14,6 +14,7 @@
   let regenBusy = $state(false);
   let extendBusy = $state(false);
   let coverBusy = $state(false);
+  let promptDraft = $state('');
 
   const COVER_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='360'%3E%3Crect width='360' height='360' fill='%23191922'/%3E%3C/svg%3E";
 
@@ -80,7 +81,8 @@
   async function regenClick() {
     if (!song) return;
     regenBusy = true;
-    try { await onRegen(song.id); } catch (_) {}
+    const overrides = promptDraft.trim() !== ((song && song.prompt) || '') ? { prompt: promptDraft } : {};
+    try { await onRegen(song.id, overrides); } catch (_) {}
     regenBusy = false;
     onClose();
   }
@@ -102,6 +104,13 @@
   /* body scroll lock while the modal is open */
   $effect(() => {
     document.body.style.overflow = song ? 'hidden' : '';
+  });
+
+  /* sync the editable prompt draft whenever a song is opened */
+  $effect(() => {
+    const s = song;
+    void s && s.id;
+    promptDraft = s ? s.prompt || '' : '';
   });
 
   /* (re)load the player whenever a song is opened */
@@ -133,7 +142,8 @@
       </div>
       <div class="modal-body">
         <h2 class="modal-title" id="modalTitle">{song ? song.title || 'Untitled' : '—'}</h2>
-        <p class="modal-prompt" id="modalPrompt" hidden={!song || !song.prompt}>{song ? song.prompt || '' : ''}</p>
+        <textarea class="modal-prompt prompt-edit" id="modalPrompt" rows="2" hidden={!song}
+          bind:value={promptDraft} placeholder="Prompt — edits here apply on Regenerate"></textarea>
 
         <div class="player glass" data-od-id="waveform-player">
           <button class="play-btn" id="modalPlay" aria-label={playing ? 'Pause' : 'Play'} onclick={togglePlay}>
@@ -175,6 +185,24 @@
             {/each}
           {/if}
         </div>
+
+        {#if variants && variants.length}
+          <div class="variants glass" data-od-id="modal-variants">
+            <div class="variants-header">Variants <span class="mono">{variants.length}</span></div>
+            {#each variants as v (v.id)}
+              <div class="variant-row" class:current={v.id === song?.id}>
+                <button class="icon-btn variant-play" aria-label="Play {v.title || 'variant'}" onclick={() => onPlayVariant && onPlayVariant(v)}>
+                  <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+                </button>
+                <span class="variant-title">{v.title || 'Untitled'}</span>
+                <span class="variant-status mono">{v.suno_status || v.status}</span>
+                <button class="icon-btn variant-delete" aria-label="Delete {v.title || 'variant'}" onclick={() => onDeleteVariant && onDeleteVariant(v)}>
+                  <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            {/each}
+          </div>
+        {/if}
 
         <div class="modal-actions" data-od-id="modal-downloads">
           <a class="btn subtle" id="dlWav" href={dlWavHref} download hidden={dlWavHidden}>
