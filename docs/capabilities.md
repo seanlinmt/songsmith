@@ -86,3 +86,78 @@ OpenAI-compatible (note: task description said `ai:8888`; actual reachable addre
 ## Open items
 1. Confirm exact `/v1/sound-generation` request/response fields for ACE-Step (test running; result will be recorded here and in `server/music.py`).
 2. Extend/continue support: to be confirmed against ACE-Step 1.5 audio-continuation capability; the extend button is gated on `MUSIC_MODEL == ace-step-turbo` until verified.
+
+## Endpoint 3: takahe LocalAI docker — `http://takahe:6767`
+
+LocalAI v4.11.0 (`localai/localai:latest-gpu-nvidia-cuda-13`), plain `docker run` on bridge
+network, port 6767→8080, all state in anonymous volumes (`/models`, `/backends`,
+`/configuration`, `/data`). RTX 2080 Ti 22 GB.
+
+### Concurrency (verified 2026-10-14)
+- Root cause of "one queue": concurrency knobs in v4.11 are **startup-time env/CLI only** —
+  `runtime_settings.json` has NO parallel key, and the UI's "Parallel Backend Requests"
+  toggle is a v2.x ghost that gets silently dropped on POST. Hardware auto-tuning forces
+  `parallel="1"` per model unless overridden in model YAML.
+- Fix applied: container recreated with `-e LOCALAI_PARALLEL_REQUESTS=true -e
+  PYTHON_GRPC_MAX_WORKERS=2` (same volumes, zero re-downloads). Old container kept as `local-ai-old`.
+- Verified: two concurrent `POST /v1/chat/completions` → wall ≈ max(7.3s, 7.7s) = 7.7s
+  (was serialized before). Parallel frontend dispatch works.
+- Piper (`voice-nl-nathalie-x-low`) still serializes: C++ backend, no parallel mode,
+  `PYTHON_GRPC_MAX_WORKERS` doesn't apply. Two ~17s TTS jobs → 34.7s wall. Expected.
+- ACE-Step (Python backend) now honors `PYTHON_GRPC_MAX_WORKERS=2` — concurrent music
+  generations possible; VRAM-permitting on the 2080 Ti.
+- llm `GLM-5.3-Flash-EXL3` here is a `localai-proxy` passthrough to `http://ai:8888/v1/chat/completions`
+  (`request_timeout_seconds: 209`) — NOT the 127.0.0.1:18888 server.
+
+### Generated-file serving (verified 2026-10-14, source-confirmed at tag v4.11.0)
+- `POST /video` response is OpenAI-images-style: `data[0].url` (absolute URL) or
+  `data[0].b64_json` if `response_format: "b64_json"`. **Read the URL from the response —
+  never construct it from backend logs.**
+- Served route: `/generated-videos/<basename>.mp4` (also `/generated-images`, `-audio`, `-3d`).
+  There is NO `/generated/...` route — a URL built from the log path 404s.
+- Generated-content dir was ephemeral (`/tmp/localai-0/generated/content`, wiped on restart);
+  fixed by recreating the container with `-e LOCALAI_GENERATED_CONTENT_PATH=/data/generated`
+  (persists on the `/data` volume). Verified: `/generated-videos/b642586812849.mp4` → 200
+  `video/mp4` after restart+restore.
+- Final container env: `LOCALAI_PARALLEL_REQUESTS=true`, `PYTHON_GRPC_MAX_WORKERS=2`,
+  `LOCALAI_GENERATED_CONTENT_PATH=/data/generated`, `LOCALAI_P2P=true`, `LOCALAI_FEDERATED=true`,
+  `LOCALAI_P2P_TOKEN=<shared_token>`, `LOCALAI_ADDRESS=0.0.0.0:6767`. Network: `--net host` (UFW `6767/tcp` allowed).
+
+### Partial-download cleanup (verified 2026-10-16)
+- Upstream only reaps stale `*.partial` (>24h) **at startup** (`CleanupStalePartialFiles`);
+  no built-in cron. Partials live next to their target + under `/models/.artifacts/.partial/<64hex>.<16hex>/`.
+- Hourly cron on takahe (root, `17 * * * *`): `/usr/local/bin/localai-cleanup.sh` — cleans
+  `*.partial`/artifact trees >24h inside both `local-ai` and `localai-manager`; log at
+  `/var/log/localai-cleanup.log`. Committed weights are never touched — reclaim those via
+  the UI Cleanup review or `POST /api/nodes/<id>/models/delete`.
+
+### Cluster topology (verified 2026-10-16): takahe is manager+worker
+- takahe now runs the **distributed manager** (`localai-manager` container, port 6767,
+  `--net host`, same image) plus its worker (`local-ai`, `worker` subcommand registering
+  to `http://127.0.0.1:6767`). Shared postgres (:5433) + NATS (:4222) on takahe back it.
+- Manager auth quirk: API keys are HMAC-hashed with a per-instance secret — the new
+  manager needed the Mac's `~/.localai/data/.hmac_secret` copied into its `/data`
+  volume (`docker cp` + restart) or every key 401s despite the shared DB.
+- Mac frontend (`127.0.0.1:7777`, launcher.json) stays up for songsmith; it shares the
+  same DB, so all frontends see the same node registry. P2P/federated env is gone —
+  the cluster is pure distributed mode now.
+- takahe node id `71867fde-ec5a-4b46-b3c4-5bf03b846750` survived re-registration
+  (identity derives from env/addr, not container), so its sticky `vram_budget: 21GB`
+  carried over. Total/available VRAM in the UI is still bogus (ghw reads NUMA RAM as
+  VRAM on this host: 377.8 GB / 2 sockets ≈ 188.8 GB); the budget is what the
+  scheduler uses. `amd`'s 8GB-report is correct; `tiny` (Apple metal) reports RAM.
+- Rollback: `local-ai-prev` on takahe holds the old worker container. Tiny's manager was
+  demoted 2026-10-16: LocalAI.app launcher quit, `auto_start_server`/`start_on_boot` set
+  false in `~/.localai/launcher.json`; the tiny *worker* still runs via launchd
+  (`localai.cluster.worker`, now registering to `192.168.20.228:6767`). Songsmith's
+  `data/settings.json` `localai_url` points at `http://192.168.20.228:6767`.
+- Model YAML configs are per-frontend disk state (not in the shared DB) — the Mac's
+  configs (`~/.localai/models/*.yaml`, kilobytes) were copied into the manager's `/models`
+  volume on takahe; `/v1/models` needs a manager restart after adding configs.
+
+### P2P Federation (verified 2026-10-15; superseded 2026-10-16 by topology above)
+- Mac (`127.0.0.1:7777`) and takahe (`takahe:6767`) are linked via LocalAI P2P & Federated mode (`--p2p --federated`) using a shared EdgeVPN token.
+- Mac config: `~/.localai/launcher.json` (environment variables `LOCALAI_P2P`, `LOCALAI_FEDERATED`, `LOCALAI_P2P_TOKEN`) and `~/.localai/configuration/runtime_settings.json`.
+- Takahe config: Container runs with `--net host` and `LOCALAI_ADDRESS=0.0.0.0:6767`, with UFW `6767/tcp` allowed on the host.
+- Verified: Both nodes discover each other over mDNS/DHT and appear in `/api/p2p` under `federated_nodes`.
+
