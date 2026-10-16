@@ -30,7 +30,7 @@ def _song_public(song: dict) -> dict:
         "instrumental", "model", "seed", "duration_seconds", "status",
         "error", "job_group_id", "parent_id", "kind", "style_prompt",
         "vocal_gender", "style_influence", "weirdness", "variety",
-        "continue_at",
+        "continue_at", "tokens_used",
     ) if k in song}
     out["negative_tags"] = song.get("negative_tags") or []
     out["suno_status"] = STATUS_MAP.get(song.get("status"), song.get("status"))

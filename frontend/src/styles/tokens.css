@@ -1,63 +1,83 @@
 /* ============================================================
    Songsmith — Design Tokens
-   Dark premium studio · violet→cyan signal gradient
+   Clean flat dark studio · warm amber signal accent
    ============================================================ */
 
 :root {
   color-scheme: dark;
 
-  /* surfaces — near-black studio */
-  --bg: #08090c;
-  --surface: #111318;
-  --surface-2: #191c23;
-  --surface-3: #22262f;
-  --glass: rgba(255, 255, 255, 0.045);
-  --glass-strong: rgba(17, 19, 24, 0.88);
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.14);
+  /* surfaces — flat matte studio hardware */
+  --bg: #0b0c0f;
+  --surface: #12141a;
+  --surface-2: #181b23;
+  --surface-3: #222631;
+  --input-bg: #0d0f14;
 
-  /* ink */
-  --text: #f3f4f6;
-  --text-dim: #9ca3af;
-  --text-faint: #6b7280;
+  /* legacy aliases mapped to flat surfaces (no blur/glass) */
+  --glass: #14171f;
+  --glass-strong: #161922;
 
-  /* signal gradient */
-  --accent: #8b5cf6;       /* violet  */
-  --accent-2: #22d3ee;     /* cyan    */
-  --grad: linear-gradient(120deg, var(--accent), var(--accent-2));
+  /* crisp structural borders */
+  --border: #232834;
+  --border-strong: #32394a;
 
-  /* states */
-  --ok: #34d399;
-  --err: #f87171;
-  --warn: #fbbf24;
+  /* ink hierarchy */
+  --text: #f3f5f8;
+  --text-dim: #9ba3b2;
+  --text-faint: #636b7a;
+
+  /* single studio accent — hardware amber LED */
+  --accent: #f59e0b;
+  --accent-hover: #fbbf24;
+  --accent-ink: #0b0c0f;
+  --accent-subtle: rgba(245, 158, 11, 0.12);
+  --accent-border: rgba(245, 158, 11, 0.42);
+
+  /* backwards-compat aliases locked to single accent */
+  --accent-2: var(--accent);
+  --grad: linear-gradient(180deg, var(--accent), var(--accent));
+
+  /* operational states */
+  --ok: #10b981;
+  --err: #ef4444;
+  --warn: #f59e0b;
 
   /* typography */
-  --font: "Inter", "SF Pro Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: "SF Mono", "Cascadia Code", ui-monospace, "JetBrains Mono", Menlo, monospace;
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+  --mono: "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace, Menlo, monospace;
 
-  --radius-sm: 10px;
-  --radius: 16px;
-  --radius-lg: 22px;
+  /* studio geometry */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
 
-  --shadow-sm: 0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.35);
-  --shadow: 0 4px 24px rgba(0,0,0,.5), 0 12px 48px rgba(0,0,0,.35);
-  --shadow-lg: 0 12px 48px rgba(0,0,0,.6), 0 24px 80px rgba(0,0,0,.4);
-  --glow: 0 0 0 1px rgba(139,92,246,.25), 0 0 24px rgba(139,92,246,.18), 0 8px 40px rgba(34,211,238,.12);
+  /* restrained flat elevation */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.65);
+  --glow: 0 0 0 2px rgba(245, 158, 11, 0.25);
 }
 
 [data-theme="light"] {
-  --bg: #f4f5f8;
+  --bg: #f4f5f7;
   --surface: #ffffff;
   --surface-2: #eef0f4;
-  --surface-3: #e4e7ee;
-  --glass: rgba(255, 255, 255, 0.6);
-  --glass-strong: rgba(255, 255, 255, 0.92);
-  --border: rgba(10, 12, 20, 0.1);
-  --border-strong: rgba(10, 12, 20, 0.16);
-  --text: #16181d;
-  --text-dim: #5b626e;
-  --text-faint: #9aa1ad;
-  --shadow-sm: 0 1px 2px rgba(20,24,40,.08), 0 4px 14px rgba(20,24,40,.06);
-  --shadow: 0 4px 24px rgba(20,24,40,.10), 0 12px 48px rgba(20,24,40,.08);
-  --shadow-lg: 0 12px 48px rgba(20,24,40,.16), 0 24px 80px rgba(20,24,40,.10);
+  --surface-3: #e3e6ec;
+  --input-bg: #ffffff;
+  --glass: #ffffff;
+  --glass-strong: #ffffff;
+  --border: #dfe3eb;
+  --border-strong: #c6cddb;
+  --text: #111318;
+  --text-dim: #525967;
+  --text-faint: #858d9d;
+  --accent: #d97706;
+  --accent-hover: #b45309;
+  --accent-ink: #ffffff;
+  --accent-subtle: rgba(217, 119, 6, 0.1);
+  --accent-border: rgba(217, 119, 6, 0.4);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 16px 40px rgba(15, 23, 42, 0.14);
 }

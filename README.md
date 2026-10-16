@@ -27,7 +27,7 @@ Songsmith is a local-first, Suno-style AI music generation studio and web UI. It
 
 - **Python**: 3.10+
 - **ffmpeg** & **ffprobe**: Required for audio transcoding (FLAC to WAV) and duration probing.
-- **Node.js** (optional): Node 18+ / npm to build the frontend (pre-built or auto-built by `./launcher.sh`).
+- **Node.js** (optional): Node 18+ / npm to build the frontend (pre-built or auto-built by `./start.sh`).
 - **Inference Backends**:
   - **Music & Images**: [LocalAI](https://localai.io) running `ace-step-turbo` and `flux.2-klein-4b` (or compatible endpoints).
   - **Lyrics & Styles**: Any OpenAI-compatible LLM endpoint (e.g., GLM, Ollama, vLLM, or LocalAI).
@@ -37,14 +37,14 @@ Songsmith is a local-first, Suno-style AI music generation studio and web UI. It
 ## Quickstart
 
 ```bash
-./launcher.sh
+./start.sh
 ```
 
-`./launcher.sh` handles port cleanup, `.venv` setup, dependency installation, frontend build, and starts uvicorn with auto-reload at [http://127.0.0.1:8788](http://127.0.0.1:8788).
+`./start.sh` handles port cleanup, `.venv` setup, dependency installation, frontend build, and starts uvicorn with auto-reload at [http://127.0.0.1:8788](http://127.0.0.1:8788).
 
 Custom host or port:
 ```bash
-PORT=9000 HOST=0.0.0.0 ./launcher.sh
+PORT=9000 HOST=0.0.0.0 ./start.sh
 ```
 
 For frontend UI development with Vite HMR:

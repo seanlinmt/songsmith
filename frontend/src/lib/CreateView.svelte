@@ -36,9 +36,9 @@
   let saveName = $state('');
   let savingStyle = $state(false);
   let removingIds = $state(new Set());
-  let nameEl;
+  let nameEl = $state();
 
-  let promptEl;
+  let promptEl = $state();
 
   const fillPct = $derived((Number(durIdx) / (DURATIONS.length - 1)) * 100);
   const tagsKey = $derived([...selectedTags].sort().join('\u0000'));
@@ -221,60 +221,50 @@
 </header>
 
 <div class="create-grid">
-  <div class="glass card create-card" data-od-id="create-form">
-    <div class="section-head">
-      <label class="field-label" for="promptInput">Describe your song</label>
-      <button class="btn subtle magic-btn" type="button" onclick={enhancePrompt} disabled={enhancing}
-        data-od-id="enhance-prompt">
-        {#if enhancing}
-          <span class="spark" aria-hidden="true">✨</span> Enhancing…
-        {:else}
-          <span class="spark" aria-hidden="true">✨</span> Enhance prompt
-        {/if}
-      </button>
-    </div>
-    <div class="prompt-wrap">
-      <textarea id="promptInput" class="prompt-input" rows="4" maxlength="2000" bind:value={prompt} bind:this={promptEl}
-        placeholder="A dreamy synth-pop track about driving through neon city rain at 2am, with a soaring chorus and airy female vocals…"
-        data-od-id="prompt-input"></textarea>
-      <span class="prompt-count" id="promptCount">{prompt.length} / 2000</span>
-    </div>
-
-    <div class="lyrics-block" id="lyricsBlock">
-      <button class="lyrics-toggle" id="lyricsToggle" aria-expanded={lyricsOpen} data-od-id="lyrics-toggle"
-        onclick={() => (lyricsOpen = !lyricsOpen)}>
-        <svg class="ico chev" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span>Custom lyrics</span>
-        <span class="field-hint">optional — leave off to let the model write them</span>
-      </button>
-      {#if lyricsOpen}
-        <div class="lyrics-panel" id="lyricsPanel">
-          <div class="lyrics-panel-inner">
-            <textarea id="lyricsInput" class="lyrics-input" rows="7" maxlength="6000" bind:value={lyricsVal}
-              placeholder="[Verse]&#10;City lights blur past the glass…&#10;&#10;[Chorus]&#10;We run the night, we own the rain…"
-              data-od-id="lyrics-input"></textarea>
-            <button class="btn subtle magic-btn" id="writeLyricsBtn" type="button" data-od-id="write-lyrics" onclick={writeLyrics} disabled={writing}>
-              {#if writing}
-                <span class="spark" aria-hidden="true">✨</span> Writing…
-              {:else}
-                <span class="spark" aria-hidden="true">✨</span> Write lyrics for me
-              {/if}
-            </button>
-            <p class="field-hint" id="lyricsHint">Use [Verse], [Chorus], [Bridge] tags to structure sections.</p>
-          </div>
-        </div>
-      {/if}
-    </div>
-
-    <div class="field-row">
+  <div class="studio-panel card create-card" data-od-id="create-form">
+    <!-- 1. Prompt -->
+    <div class="studio-section">
       <div class="section-head">
-        <span class="field-label" id="styleLabel">Style</span>
+        <label class="field-label" for="promptInput">
+          <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Describe your song
+        </label>
+        <button class="btn subtle magic-btn" type="button" onclick={enhancePrompt} disabled={enhancing}
+          data-od-id="enhance-prompt">
+          <span class="spark" aria-hidden="true">
+            <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </span>
+          {#if enhancing}
+            Enhancing…
+          {:else}
+            Enhance prompt
+          {/if}
+        </button>
+      </div>
+      <div class="prompt-wrap">
+        <textarea id="promptInput" class="prompt-input" rows="4" maxlength="2000" bind:value={prompt} bind:this={promptEl}
+          placeholder="A dreamy synth-pop track about driving through neon city rain at 2am, with a soaring chorus and airy female vocals…"
+          data-od-id="prompt-input"></textarea>
+        <span class="prompt-count" id="promptCount">{prompt.length} / 2000</span>
+      </div>
+    </div>
+
+    <!-- 2. Style Chips -->
+    <div class="field-row studio-section">
+      <div class="section-head">
+        <span class="field-label" id="styleLabel">
+          <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Style &amp; sonic tags
+        </span>
         <button class="btn subtle magic-btn" type="button" onclick={expandStyle} disabled={expanding}
           data-od-id="expand-style">
+          <span class="spark" aria-hidden="true">
+            <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </span>
           {#if expanding}
-            <span class="spark" aria-hidden="true">✨</span> Expanding…
+            Expanding…
           {:else}
-            <span class="spark" aria-hidden="true">✨</span> Expand style
+            Expand style
           {/if}
         </button>
       </div>
@@ -306,7 +296,7 @@
       {#if saveOpen}
         <div class="save-panel" data-od-id="save-style-panel">
           <div class="save-panel-inner">
-            <label class="field-label" for="styleNameInput">Style name</label>
+            <label class="field-label" for="styleNameInput">Style preset name</label>
             <input id="styleNameInput" class="input" type="text" maxlength="60" bind:value={saveName}
               bind:this={nameEl} placeholder="e.g. Late night drive"
               data-od-id="save-style-name" />
@@ -332,17 +322,64 @@
       {/if}
     </div>
 
+    <!-- 3. Collapsible Custom Lyrics -->
+    <div class="lyrics-block" id="lyricsBlock">
+      <button class="lyrics-toggle" id="lyricsToggle" type="button" aria-expanded={lyricsOpen} data-od-id="lyrics-toggle"
+        onclick={() => (lyricsOpen = !lyricsOpen)}>
+        <svg class="ico chev" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Custom lyrics</span>
+        <span class="field-hint">optional — leave off to let the model write them</span>
+      </button>
+      {#if lyricsOpen}
+        <div class="lyrics-panel" id="lyricsPanel">
+          <div class="lyrics-panel-inner">
+            <label class="field-label" for="lyricsInput">
+              <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M9 18V5l12-2v13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="16" r="3" stroke="currentColor" stroke-width="2"/></svg>
+              Lyric sheet
+            </label>
+            <textarea id="lyricsInput" class="lyrics-input" rows="7" maxlength="6000" bind:value={lyricsVal}
+              placeholder="[Verse]&#10;City lights blur past the glass…&#10;&#10;[Chorus]&#10;We run the night, we own the rain…"
+              data-od-id="lyrics-input"></textarea>
+            <div class="lyrics-toolbar">
+              <button class="btn subtle magic-btn" id="writeLyricsBtn" type="button" data-od-id="write-lyrics" onclick={writeLyrics} disabled={writing}>
+                <span class="spark" aria-hidden="true">
+                  <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+                {#if writing}
+                  Writing…
+                {:else}
+                  Write lyrics for me
+                {/if}
+              </button>
+              <p class="field-hint" id="lyricsHint">Use [Verse], [Chorus], [Bridge] tags to structure sections.</p>
+            </div>
+          </div>
+        </div>
+      {/if}
+    </div>
+
+    <!-- 4. Instrumental Switch + Duration Slider -->
     <div class="control-row">
       <div class="control-block" data-od-id="instrumental-toggle">
-        <span class="field-label" id="instLabel">Instrumental</span>
-        <button class="switch" role="switch" aria-checked={inst} aria-labelledby="instLabel" data-od-id="instrumental-switch"
-          onclick={() => (inst = !inst)}>
-          <span class="knob"></span>
-        </button>
+        <span class="field-label" id="instLabel">
+          <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" stroke="currentColor" stroke-width="1.8"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Instrumental
+        </span>
+        <div class="switch-row">
+          <span class="switch-state-label">{inst ? 'No vocals' : 'With vocals'}</span>
+          <button class="switch" type="button" role="switch" aria-checked={inst} aria-labelledby="instLabel" data-od-id="instrumental-switch"
+            onclick={() => (inst = !inst)}>
+            <span class="knob"></span>
+          </button>
+        </div>
       </div>
+
       <div class="control-block control-block-grow" data-od-id="duration-slider">
         <div class="slider-head">
-          <span class="field-label" id="durLabel">Duration</span>
+          <label class="field-label" id="durLabel" for="durationSlider">
+            <svg class="ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            Duration
+          </label>
           <span class="duration-readout" id="durationReadout">{fmtDur(DURATIONS[Number(durIdx)])}</span>
         </div>
         <input type="range" id="durationSlider" class="range" min="0" max="4" step="1" bind:value={durIdx}
@@ -353,12 +390,20 @@
       </div>
     </div>
 
+    <!-- 5. Track Title -->
     <div class="field-row title-row" data-od-id="title-field">
-      <label class="field-label" for="titleInput">Title</label>
-      <input id="titleInput" class="input" type="text" maxlength="120" bind:value={title}
-        placeholder="Leave blank and we'll name it" data-od-id="title-input" />
+      <label class="field-label" for="titleInput">
+        <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M4 7V4h16v3M9 20h6M12 4v16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Track title
+      </label>
+      <div class="input-with-icon">
+        <svg class="input-ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 18V5l12-2v13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="2.5" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="16" r="2.5" stroke="currentColor" stroke-width="1.8"/></svg>
+        <input id="titleInput" class="input" type="text" maxlength="120" bind:value={title}
+          placeholder="Leave blank and we'll name it" data-od-id="title-input" />
+      </div>
     </div>
 
+    <!-- 6. Single Strong Generate CTA -->
     <div class="cta-row">
       <button class="btn primary btn-generate" id="generateBtn" data-od-id="generate-cta" onclick={generate} disabled={generating}>
         <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M9 18V6l10.5-2.5v11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.5" cy="18" r="3" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="14.5" r="3" stroke="currentColor" stroke-width="2"/></svg>
@@ -372,12 +417,12 @@
   </div>
 
   <aside class="create-side">
-    <div class="glass card tip-card" data-od-id="tip-card">
-      <h3>Pro tips</h3>
+    <div class="studio-panel card tip-card" data-od-id="tip-card">
+      <h3>Studio reference</h3>
       <ul class="tip-list">
-        <li><strong>Be specific.</strong> Mood, tempo, instruments and vocal style all land in the model.</li>
-        <li><strong>Stack tags.</strong> Chips append to your prompt — combine “lo-fi” with “jazz”.</li>
-        <li><strong>Structure lyrics.</strong> [Chorus] tags keep hooks repeating where they should.</li>
+        <li><strong>Be specific</strong> Mood, tempo, instruments, and vocal delivery all guide the generator.</li>
+        <li><strong>Stack tags</strong> Style chips append directly to your prompt — combine genres like “lo-fi” + “jazz”.</li>
+        <li><strong>Structure lyrics</strong> Section markers like [Verse] and [Chorus] anchor repeating hooks.</li>
       </ul>
     </div>
   </aside>

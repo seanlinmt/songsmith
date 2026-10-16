@@ -87,10 +87,13 @@ async def _run_generation(job: dict) -> None:
 
     # 1. Lyrics via LLM if needed (also yields a title in the same call)
     llm_title: str | None = None
+    tokens_used: int | None = None  # cumulative LLM token usage (None = no calls)
     tags = song.get("tags") or []
     if not instrumental and not lyrics:
         _update_job(job_id, progress=0.1, message="writing lyrics")
-        lyrics, llm_title = await llm.generate_lyrics(prompt, tags=tags)
+        lyrics, llm_title, usage = await llm.generate_lyrics(prompt, tags=tags)
+        if usage is not None:
+            tokens_used = (tokens_used or 0) + usage
         if not lyrics:
             raise RuntimeError("LLM returned empty lyrics; provide lyrics or mark instrumental")
         _set_song(song_id, lyrics=lyrics)
@@ -100,7 +103,9 @@ async def _run_generation(job: dict) -> None:
     if not song.get("title"):
         title = llm_title
         if not title:
-            title = await llm.generate_title(prompt, lyrics, tags=tags)
+            title, usage = await llm.generate_title(prompt, lyrics, tags=tags)
+            if usage is not None:
+                tokens_used = (tokens_used or 0) + usage
         if not title:
             title = f"Untitled {datetime.now().strftime('%Y-%m-%d')}"
         _set_song(song_id, title=title)
@@ -111,7 +116,9 @@ async def _run_generation(job: dict) -> None:
     negative_tags: list[str] = song.get("negative_tags") or []
     if tags:
         _update_job(job_id, progress=0.25, message="expanding style")
-        style, neg = await llm.expand_style(prompt, tags)
+        style, neg, usage = await llm.expand_style(prompt, tags)
+        if usage is not None:
+            tokens_used = (tokens_used or 0) + usage
         style_prompt = style
         negative_tags = neg
         _set_song(song_id, style_prompt=style, negative_tags=json.dumps(neg))
@@ -131,12 +138,14 @@ async def _run_generation(job: dict) -> None:
     )
 
     # 4. Update song row (audio done)
-    _set_song(
-        song_id,
+    done_fields = dict(
         status="done",
         audio_path=result["audio_path"],
         duration_seconds=result["duration_seconds"] or duration,
     )
+    if tokens_used is not None:
+        done_fields["tokens_used"] = tokens_used
+    _set_song(song_id, **done_fields)
 
     # 5. Cover art — separate, best-effort, non-blocking for audio
     _update_job(job_id, progress=0.8, message="generating cover art")

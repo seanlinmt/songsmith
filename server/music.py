@@ -69,29 +69,50 @@ async def request_ace_step(
     if negative_tags:
         payload["negative_prompt"] = ", ".join(negative_tags)
 
+    async def _post() -> httpx.Response:
+        return await client.post(
+            f"{config.MUSIC_URL}/v1/sound-generation",
+            json=payload,
+            timeout=_TIMEOUT,
+        )
+
+    def _err(resp: httpx.Response) -> RuntimeError:
+        # The 500 body names the real cause (e.g. "Generation produced NaN or
+        # Inf latents …" from the ACE-Step backend) — never discard it.
+        return RuntimeError(
+            f"sound-generation HTTP {resp.status_code}: {resp.text[:500]}"
+        )
+
     async with httpx.AsyncClient(headers=_localai_headers()) as client:
-        try:
-            resp = await client.post(
-                f"{config.MUSIC_URL}/v1/sound-generation",
-                json=payload,
-                timeout=_TIMEOUT,
-            )
-            resp.raise_for_status()
-        except httpx.HTTPStatusError:
-            if "negative_prompt" not in payload:
-                raise
+        resp = await _post()
+        if resp.status_code >= 400 and "negative_prompt" in payload:
             # Older builds may reject the unknown field: retry once without it.
-            log.warning("sound-generation rejected negative_prompt; retrying without it")
+            log.warning("sound-generation rejected negative_prompt (%d); retrying without it", resp.status_code)
             payload.pop("negative_prompt")
-            resp = await client.post(
-                f"{config.MUSIC_URL}/v1/sound-generation",
-                json=payload,
-                timeout=_TIMEOUT,
-            )
-            resp.raise_for_status()
+            resp = await _post()
+        if resp.status_code == 500:
+            # Remote ACE-Step can hit fp16 NaN latents for certain
+            # (lyrics, seed) pairs; a fresh seed sometimes clears it.
+            # NOTE: on hosts with the fp16 overflow the NaN rate for real
+            # lyrics approaches 100% — the real fix is server-side
+            # (ACESTEP_DTYPE=float32 or --backend pt). Keep this cheap: one
+            # retry, so failed jobs surface the server error quickly.
+            body = resp.text[:200]
+            if "NaN" in body or "nan" in body:
+                import random
+
+                fresh = random.randrange(1, 2**31)
+                log.warning(
+                    "sound-generation NaN latents (seed=%s); retrying once with seed=%s",
+                    payload.get("seed"), fresh,
+                )
+                payload["seed"] = fresh
+                resp = await _post()
+        if resp.status_code >= 400:
+            raise _err(resp)
         content = resp.content
-        if not content.startswith(b"fLaC"):
-            log.warning("sound-generation response lacks fLaC magic (%d bytes)", len(content))
+        if not (content.startswith(b"fLaC") or content.startswith(b"RIFF")):
+            log.warning("sound-generation response lacks audio magic (%d bytes)", len(content))
         return content
 
 
@@ -145,20 +166,26 @@ async def generate(
         vocal_gender=vocal_gender,
     )
 
-    flac_path = config.DATA_DIR / "audio" / f"{song_id}.flac"
-    flac_path.parent.mkdir(parents=True, exist_ok=True)
-    flac_path.write_bytes(flac_bytes)
-
-    audio_path = f"audio/{song_id}.flac"
-    if _ffmpeg_available():
+    if flac_bytes.startswith(b"RIFF"):
         wav_path = config.DATA_DIR / "audio" / f"{song_id}.wav"
-        if await _transcode_to_wav(flac_path, wav_path):
-            audio_path = f"audio/{song_id}.wav"
-        else:
-            log.warning("ffmpeg transcode failed for %s; serving flac master", song_id)
-            wav_path.unlink(missing_ok=True)
+        wav_path.parent.mkdir(parents=True, exist_ok=True)
+        wav_path.write_bytes(flac_bytes)
+        audio_path = f"audio/{song_id}.wav"
     else:
-        log.warning("ffmpeg not on PATH; keeping flac master only for %s", song_id)
+        flac_path = config.DATA_DIR / "audio" / f"{song_id}.flac"
+        flac_path.parent.mkdir(parents=True, exist_ok=True)
+        flac_path.write_bytes(flac_bytes)
+
+        audio_path = f"audio/{song_id}.flac"
+        if _ffmpeg_available():
+            wav_path = config.DATA_DIR / "audio" / f"{song_id}.wav"
+            if await _transcode_to_wav(flac_path, wav_path):
+                audio_path = f"audio/{song_id}.wav"
+            else:
+                log.warning("ffmpeg transcode failed for %s; serving flac master", song_id)
+                wav_path.unlink(missing_ok=True)
+        else:
+            log.warning("ffmpeg not on PATH; keeping flac master only for %s", song_id)
 
     duration_seconds = await _probe_duration(
         config.DATA_DIR / audio_path.replace("/", "/")

@@ -49,8 +49,9 @@
   }
 </script>
 
-<article class="glass song-card" data-od-id="song-card-{song.id}" tabindex="0" role="button"
-  aria-label={'Open ' + (song.title || 'song')} onclick={handleClick}>
+<div class="studio-panel song-card" data-od-id="song-card-{song.id}" tabindex="0" role="button"
+  aria-label={'Open ' + (song.title || 'song')} onclick={handleClick}
+  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(e); } }}>
   <div class="song-cover">
     {#if cover}
       <img loading="lazy" src={cover} alt="" width="300" height="300"
@@ -60,6 +61,10 @@
     {/if}
     <span class="song-duration">{fmtDur(song.duration_seconds)}</span>
     <div class="play-overlay">
+      <span class="expand-badge" aria-hidden="true">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" style="width:12px;height:12px"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Inspect
+      </span>
       <button class="play-btn" data-play={song.id} aria-label={'Play ' + (song.title || 'song')}>
         <svg class="ico play-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
       </button>
@@ -107,4 +112,4 @@
       <span>Delete</span>
     </button>
   </div>
-</article>
+</div>

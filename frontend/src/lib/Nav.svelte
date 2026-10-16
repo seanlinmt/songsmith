@@ -1,13 +1,14 @@
 <script>
-  let { route = 'create', libraryCount = 0, healthState = 'unknown', onRoute, onRefreshHealth } = $props();
+  let { route = 'create', libraryCount = 0, healthState = 'unknown', onRoute, onRefreshHealth, onOpenLogs } = $props();
 </script>
 
-<nav class="topnav glass" data-od-id="topnav" aria-label="Main">
-  <a class="brand" href="#" data-od-id="brand" onclick={(e) => { e.preventDefault(); onRoute('create'); }}>
+<nav class="topnav" data-od-id="topnav" aria-label="Main">
+  <a class="brand" href="/" data-od-id="brand" onclick={(e) => { e.preventDefault(); onRoute('create'); }}>
     <span class="brand-mark" aria-hidden="true">
-      <svg viewBox="0 0 64 64" width="26" height="26" fill="none">
-        <defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--accent)"/><stop offset="1" stop-color="var(--accent-2)"/></linearGradient></defs>
-        <path d="M40 12v24.8a8.8 8.8 0 1 0 3.4 6.95V22.6h8.6V14.7H49V12z" fill="url(#bm)"/>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+        <path d="M9 18V5l12-2v13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="2"/>
+        <circle cx="18" cy="16" r="3" stroke="currentColor" stroke-width="2"/>
       </svg>
     </span>
     <span class="brand-name">Songsmith</span>
@@ -15,11 +16,11 @@
   </a>
   <div class="nav-tabs" role="tablist">
     <button class="nav-tab" role="tab" data-route="create" aria-selected={route === 'create'} onclick={() => onRoute('create')}>
-      <svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       <span>Create</span>
     </button>
     <button class="nav-tab" role="tab" data-route="library" aria-selected={route === 'library'} onclick={() => onRoute('library')}>
-      <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M4 4h2.5v16H4zM9 4h2.5v16H9zM15.2 5.1l2.3-.6 4 15-2.3.6z" fill="currentColor"/></svg>
+      <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M4 5h2.5v14H4zM9.5 5H12v14H9.5zM15.2 5.4l2.3-.5 3.5 14-2.3.5z" fill="currentColor"/></svg>
       <span>Library</span>
       {#if libraryCount > 0}
         <span class="nav-badge">{libraryCount}</span>
@@ -33,5 +34,12 @@
   </div>
   <button class="ghost-btn" title="Check API health" onclick={() => onRefreshHealth()}>
     <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Check health</span>
+  </button>
+  <button class="ghost-btn" title="Server logs" aria-label="Server logs" onclick={() => onOpenLogs?.()}>
+    <svg class="ico" viewBox="0 0 24 24" fill="none">
+      <rect x="8" y="7" width="8" height="13" rx="4" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M12 7V4.5M9.2 5.2 8 3.6m6.8 1.6L16 3.6M8 10.5H4.5m15 0H16M8 15H4.5m15 0H16M8.4 18.8l-1.9 1.4m9.1-1.4 1.9 1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
   </button>
 </nav>

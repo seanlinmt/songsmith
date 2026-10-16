@@ -43,22 +43,18 @@
 </div>
 
 {#if songs.length === 0}
-  <div class="empty-state glass" id="libraryEmpty" data-od-id="library-empty">
+  <div class="empty-state studio-panel" id="libraryEmpty" data-od-id="library-empty">
     <div class="vinyl" aria-hidden="true">
-      <svg viewBox="0 0 120 120" width="120" height="120">
-        <defs>
-          <linearGradient id="vg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--accent)"/><stop offset="1" stop-color="var(--accent-2)"/></linearGradient>
-        </defs>
-        <circle cx="60" cy="60" r="56" fill="var(--surface-2)" stroke="rgba(255,255,255,.14)"/>
-        <circle cx="60" cy="60" r="46" fill="none" stroke="rgba(255,255,255,.08)"/>
-        <circle cx="60" cy="60" r="38" fill="none" stroke="rgba(255,255,255,.07)"/>
-        <circle cx="60" cy="60" r="30" fill="none" stroke="rgba(255,255,255,.06)"/>
-        <circle cx="60" cy="60" r="18" fill="url(#vg)" opacity=".9"/>
-        <circle cx="60" cy="60" r="4.5" fill="var(--bg)"/>
+      <svg viewBox="0 0 80 80" width="72" height="72" fill="none">
+        <circle cx="40" cy="40" r="36" fill="var(--surface-2)" stroke="var(--border-strong)" stroke-width="1.5"/>
+        <circle cx="40" cy="40" r="26" stroke="var(--border)" stroke-width="1"/>
+        <circle cx="40" cy="40" r="18" stroke="var(--border)" stroke-width="1"/>
+        <circle cx="40" cy="40" r="10" fill="var(--accent)"/>
+        <circle cx="40" cy="40" r="3" fill="var(--bg)"/>
       </svg>
     </div>
     <h2>Create your first song</h2>
-    <p>Your library is empty. Describe a vibe in Create and Songsmith will spin up a song for you.</p>
+    <p>Your library is empty. Describe a vibe in Create and Songsmith will render a track locally.</p>
     <button class="btn primary" id="emptyCreateBtn" onclick={onGoCreate}>Go to Create</button>
   </div>
 {/if}

@@ -37,7 +37,9 @@ def _llm_headers() -> dict:
 
 
 async def _chat(client: httpx.AsyncClient, messages: list[dict],
-                temperature: float = 0.9) -> str:
+                temperature: float = 0.9) -> tuple[str, int | None]:
+    """Returns (content, total_tokens) — total_tokens is None when the API
+    omits usage data."""
     resp = await client.post(
         f"{config.LLM_URL}/v1/chat/completions",
         json={
@@ -49,21 +51,25 @@ async def _chat(client: httpx.AsyncClient, messages: list[dict],
     )
     resp.raise_for_status()
     data = resp.json()
-    return (data["choices"][0]["message"]["content"] or "").strip()
+    usage = data.get("usage") or {}
+    total_tokens = usage.get("total_tokens") if isinstance(usage, dict) else None
+    return (data["choices"][0]["message"]["content"] or "").strip(), total_tokens
 
 
-async def generate_lyrics(prompt: str, tags: list[str] | None = None) -> tuple[str, str | None]:
-    """Returns (lyrics, title) — title may be None if the model skipped it."""
+async def generate_lyrics(prompt: str, tags: list[str] | None = None) -> tuple[str, str | None, int | None]:
+    """Returns (lyrics, title, usage) — title/usage may be None if the model
+    skipped the title or the API omitted usage."""
     user_content = prompt
     if tags:
         user_content = f"{prompt}\n\nStyle/genre: {', '.join(tags)}"
     try:
         async with httpx.AsyncClient(headers=_llm_headers()) as client:
-            content = await _chat(client, [
+            content, usage = await _chat(client, [
                 {"role": "system", "content": LYRICS_SYSTEM},
                 {"role": "user", "content": user_content},
             ])
-            return _split_title(content)
+            lyrics, title = _split_title(content)
+            return lyrics, title, usage
     except httpx.TimeoutException as exc:
         raise RuntimeError("LLM busy: request timed out, try again shortly") from exc
     except httpx.ConnectError as exc:
@@ -77,7 +83,8 @@ TITLE_SYSTEM = (
 
 
 async def generate_title(prompt: str, lyrics: str,
-                         tags: list[str] | None = None) -> str | None:
+                         tags: list[str] | None = None) -> tuple[str | None, int | None]:
+    """Returns (title, usage) — both None if generation failed."""
     content = f"Song description: {prompt}\n\nLyrics:\n{lyrics[:2000]}"
     if tags:
         content = f"{content}\n\nStyle/genre: {', '.join(tags)}"
@@ -89,7 +96,7 @@ async def generate_title(prompt: str, lyrics: str,
             ], temperature=0.7)
     except Exception:
         log.exception("title generation failed")
-        return None
+        return None, None
 
 
 ENHANCE_SYSTEM = (
@@ -102,18 +109,18 @@ ENHANCE_SYSTEM = (
 
 
 async def enhance_description(prompt: str,
-                              tags: list[str] | None = None) -> str | None:
+                              tags: list[str] | None = None) -> tuple[str | None, int | None]:
     """Expand a short user description into a rich prompt for the music model."""
     user_content = prompt
     if tags:
         user_content = f"{prompt}\n\nStyle/genre: {', '.join(tags)}"
     try:
         async with httpx.AsyncClient(headers=_llm_headers()) as client:
-            content = await _chat(client, [
+            content, usage = await _chat(client, [
                 {"role": "system", "content": ENHANCE_SYSTEM},
                 {"role": "user", "content": user_content},
             ], temperature=0.7)
-        return " ".join(content.strip().strip('"').split()) or None
+        return " ".join(content.strip().strip('"').split()) or None, usage
     except httpx.TimeoutException as exc:
         raise RuntimeError("LLM busy: request timed out, try again shortly") from exc
     except httpx.ConnectError as exc:
@@ -148,26 +155,28 @@ def _parse_style_reply(content: str) -> tuple[str, list[str]] | None:
     return style, neg
 
 
-async def expand_style(prompt: str, tags: list[str]) -> tuple[str, list[str]]:
+async def expand_style(prompt: str, tags: list[str]) -> tuple[str, list[str], int | None]:
     """Best-effort: expand tags into a rich style description + negative tags.
 
-    Returns (style_prompt, negative_tags); on any failure falls back to
-    (", ".join(tags), []).
+    Returns (style_prompt, negative_tags, usage); on any failure falls back to
+    (", ".join(tags), [], None). usage is None when the API omitted it.
     """
     fallback = (", ".join(tags), [])
     try:
         async with httpx.AsyncClient(headers=_llm_headers()) as client:
-            content = await _chat(client, [
+            content, usage = await _chat(client, [
                 {"role": "system", "content": STYLE_SYSTEM},
                 {"role": "user", "content": f"Song description: {prompt}\n\nStyle tags: {', '.join(tags)}"},
             ], temperature=0.5)
         parsed = _parse_style_reply(content)
         if parsed is None:
-            return fallback
-        return parsed
+            style, neg = fallback
+        else:
+            style, neg = parsed
+        return style, neg, usage
     except Exception:
         log.exception("style expansion failed")
-        return fallback
+        return fallback[0], fallback[1], None
 
 
 COVER_SCENE_SYSTEM = (
@@ -193,7 +202,7 @@ async def describe_cover_scene(lyrics: str | None, prompt: str | None,
         parts.append(f"Style: {', '.join(tags)}")
     try:
         async with httpx.AsyncClient(headers=_llm_headers()) as client:
-            content = await _chat(client, [
+            content, _usage = await _chat(client, [
                 {"role": "system", "content": COVER_SCENE_SYSTEM},
                 {"role": "user", "content": "\n\n".join(parts)},
             ], temperature=0.6)

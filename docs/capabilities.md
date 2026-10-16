@@ -142,10 +142,25 @@ network, port 6767→8080, all state in anonymous volumes (`/models`, `/backends
   same DB, so all frontends see the same node registry. P2P/federated env is gone —
   the cluster is pure distributed mode now.
 - takahe node id `71867fde-ec5a-4b46-b3c4-5bf03b846750` survived re-registration
-  (identity derives from env/addr, not container), so its sticky `vram_budget: 21GB`
-  carried over. Total/available VRAM in the UI is still bogus (ghw reads NUMA RAM as
+  (identity derives from env/addr, not container), so its sticky `vram_budget: 21GB` carried over. Total/available VRAM in the UI is still bogus (ghw reads NUMA RAM as
   VRAM on this host: 377.8 GB / 2 sockets ≈ 188.8 GB); the budget is what the
   scheduler uses. `amd`'s 8GB-report is correct; `tiny` (Apple metal) reports RAM.
+- VRAM misreport FIXED 2026-10-16 via docker launch params. `TotalAvailableVRAM()`
+  prefers ghw and returns early (`pkg/xsysinfo/gpu.go`), so nvidia-smi's true
+  22528 MiB never gets a turn while `/usr/share/misc/pci.ids` parses. Worker
+  container recreated with `--mount type=tmpfs,destination=/usr/share/misc`
+  (masks pci.ids → ghw errors → falls through to nvidia-smi) and
+  `-e LOCALAI_VRAM_BUDGET=22528MiB` (worker-reported budget; caps
+  `available_vram` server-side). Also added `--init` (upstream: without it
+  `nvidia-smi` intermittently fails with `waitid: no child processes`).
+  Verified: node now reports `total_vram: 23622320128` (22 GiB) at
+  registration; UI bar reads real numbers. Note: the API `PUT
+  /api/nodes/<id>/vram-budget` takes `{"value":"22GB"}` (not `{"vram_budget":…}`);
+  a sticky DB override beats the worker's env — `DELETE` the endpoint to let
+  `LOCALAI_VRAM_BUDGET` win again. An EMPTY pci.ids file is not enough (ghw
+  parses it fine) — the file must be ABSENT, hence the tmpfs mount over the dir.
+  Old containers kept as `local-ai-prev2` (stopped) and inspect backup at
+  `/tmp/local-ai-inspect-backup-2026-10-16.json`.
 - Rollback: `local-ai-prev` on takahe holds the old worker container. Tiny's manager was
   demoted 2026-10-16: LocalAI.app launcher quit, `auto_start_server`/`start_on_boot` set
   false in `~/.localai/launcher.json`; the tiny *worker* still runs via launchd
@@ -154,6 +169,35 @@ network, port 6767→8080, all state in anonymous volumes (`/models`, `/backends
 - Model YAML configs are per-frontend disk state (not in the shared DB) — the Mac's
   configs (`~/.localai/models/*.yaml`, kilobytes) were copied into the manager's `/models`
   volume on takahe; `/v1/models` needs a manager restart after adding configs.
+
+### foundation-sec-8b-q8_0 load failure + fix (verified 2026-10-16)
+- Symptom: `POST /v1/chat/completions` → 500 `stale model config revision (request carries
+  da6978…, controller holds 60d64952…)`; `amd` node showed `model_count: 0` and repeated
+  unload-to-load churn. Fixed by `docker restart localai-manager` (controller re-reads
+  config revisions from its `/models` volume; node identity/budgets survive).
+- Second failure after restart: `llama_model_load_from_file_impl: exactly one out
+  metadata, path_model, and file must be defined` == the llama.cpp server got an EMPTY
+  model path (cf. ggml-org/llama.cpp discussion #27095). Gallery import had written
+  `parameters.model: foundation-sec-8b-reasoning` (a name, not a path) while the GGUF
+  sits at `llama-cpp/models/foundation-sec-8b-q8_0/foundation-sec-8b-q8_0.gguf`.
+- Rule: `parameters.model` must be a path **prefixed with the gallery-backend dir**,
+  same as flux.2-klein-4b (`stablediffusion-cpp/models/…`). Fixed YAML now has
+  `parameters.model: llama-cpp/models/foundation-sec-8b-q8_0/foundation-sec-8b-q8_0.gguf`
+  with `backend: rocm-turboquant`.
+- Verified: model loads on node `amd` (RX 6800, `rocm-turboquant` backend) and answers
+  chat completions through the manager. Not an AMD/ROCm issue — never was.
+- Renamed 2026-10-16: served model id is now `foundation-sec-8b-reasoning` (config
+  `name:` changed; artifact path unchanged, still under `llama-cpp/models/foundation-sec-8b-q8_0/`).
+  Gotcha: scheduling rules live in the shared DB (`model_scheduling_configs`) keyed by
+  model NAME — renaming a model silently drops its node pin. The old name had
+  `{"gpu.vendor":"amd"}`; without it the scheduler cold-loaded onto takahe (no rocm
+  backend) with `no backend found with name "rocm-turboquant"`. Fix: update
+  `model_name`/`target_model` in that table to the new name, restart manager.
+  Also: distributed artifacts live at `models/<model-name>/<parameters.model>` on each
+  worker, so renaming the model requires renaming that dir on the worker too
+  (`mv /models/foundation-sec-8b-q8_0 /models/foundation-sec-8b-reasoning` on amd).
+- Caveat: model is Llama-3.1-based; if load ever OOMs on 16GB, pin a context size in the
+  YAML (default-ctx KV cache is the suspect, not weights: Q8_0 is 8.5 GB).
 
 ### P2P Federation (verified 2026-10-15; superseded 2026-10-16 by topology above)
 - Mac (`127.0.0.1:7777`) and takahe (`takahe:6767`) are linked via LocalAI P2P & Federated mode (`--p2p --federated`) using a shared EdgeVPN token.

@@ -6,10 +6,11 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from . import config, db, queue
+from . import config, db, logbuf, queue
 from .routes import health, jobs, settings, songs, styles
 
 logging.basicConfig(level=logging.INFO)
+logbuf.install()
 
 
 @asynccontextmanager
@@ -28,6 +29,7 @@ app.include_router(jobs.router)
 app.include_router(health.router)
 app.include_router(settings.router)
 app.include_router(styles.router)
+app.include_router(logbuf.router)
 
 # Serve generated audio/covers from the data dir.
 config.ensure_dirs()

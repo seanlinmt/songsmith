@@ -31,6 +31,7 @@
     if (song.model) p.push(['model', song.model]);
     if (song.seed != null) p.push(['seed', String(song.seed)]);
     if (song.duration_seconds != null) p.push(['duration', fmtDur(song.duration_seconds)]);
+    if (song.tokens_used != null) p.push(['tokens used', String(song.tokens_used)]);
     if (song.created_at) p.push(['created', String(song.created_at).slice(0, 10)]);
     return p;
   });
@@ -131,8 +132,8 @@
 </script>
 
 <div class="modal-root" id="songModal" hidden={!song} data-od-id="song-modal">
-  <div class="modal-backdrop" id="modalBackdrop" onclick={onClose}></div>
-  <div class="modal glass-strong" role="dialog" aria-modal="true" aria-labelledby="modalTitle" data-od-id="song-modal-panel">
+  <button type="button" class="modal-backdrop" id="modalBackdrop" aria-label="Close modal" onclick={onClose}></button>
+  <div class="modal studio-panel-strong" role="dialog" aria-modal="true" aria-labelledby="modalTitle" data-od-id="song-modal-panel">
     <button class="icon-btn modal-close" id="modalClose" aria-label="Close" onclick={onClose}>
       <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     </button>
@@ -142,10 +143,14 @@
       </div>
       <div class="modal-body">
         <h2 class="modal-title" id="modalTitle">{song ? song.title || 'Untitled' : '—'}</h2>
+        <label class="field-label" for="modalPrompt" style="margin-top: 14px; margin-bottom: 6px;">
+          <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Prompt (editable on regenerate)
+        </label>
         <textarea class="modal-prompt prompt-edit" id="modalPrompt" rows="2" hidden={!song}
           bind:value={promptDraft} placeholder="Prompt — edits here apply on Regenerate"></textarea>
 
-        <div class="player glass" data-od-id="waveform-player">
+        <div class="player" data-od-id="waveform-player">
           <button class="play-btn" id="modalPlay" aria-label={playing ? 'Pause' : 'Play'} onclick={togglePlay}>
             <svg class="ico play-ico" viewBox="0 0 24 24" fill="currentColor" style={playing ? 'display:none' : ''}><path d="M8 5.5v13l11-6.5z"/></svg>
             <svg class="ico pause-ico" viewBox="0 0 24 24" fill="currentColor" style={playing ? '' : 'display:none'}><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
@@ -170,7 +175,7 @@
           {/each}
         </div>
 
-        <div class="lyrics-scroll glass" id="modalLyrics" tabindex="0" data-od-id="modal-lyrics">
+        <div class="lyrics-scroll" id="modalLyrics" data-od-id="modal-lyrics">
           {#if !lyricLines}
             <p class="field-hint">No lyrics for this track.</p>
           {:else}
@@ -187,7 +192,7 @@
         </div>
 
         {#if variants && variants.length}
-          <div class="variants glass" data-od-id="modal-variants">
+          <div class="variants" data-od-id="modal-variants">
             <div class="variants-header">Variants <span class="mono">{variants.length}</span></div>
             {#each variants as v (v.id)}
               <div class="variant-row" class:current={v.id === song?.id}>

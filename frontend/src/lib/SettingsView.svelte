@@ -109,7 +109,7 @@
 </header>
 
 <div class="settings-grid">
-  <div class="glass card settings-card" data-od-id="settings-endpoints">
+  <div class="studio-panel card settings-card" data-od-id="settings-endpoints">
     <div class="settings-card-head">
       <h3>Endpoints &amp; models</h3>
       <div class="settings-head-actions">
@@ -123,46 +123,66 @@
       </div>
     </div>
 
-    <div class="field-grid cols3">
-      <div class="field">
-        <label class="field-label" for="cfgLocalai"><span class="status-dot dot-inline" data-state={health?.music?.state || 'unknown'}></span> Music endpoint</label>
-        <input class="input" id="cfgLocalai" type="url" placeholder="—" bind:value={musicUrl} />
-      </div>
-      <div class="field">
-        <label class="field-label" for="cfgMusicModel">Music model</label>
-        <input class="input" id="cfgMusicModel" type="text" placeholder="—" bind:value={musicModel} />
-      </div>
-      <div class="field">
-        <label class="field-label" for="cfgMusicKey">API key</label>
-        <input class="input" id="cfgMusicKey" type="password" placeholder="optional" autocomplete="off" bind:value={musicKey} />
-      </div>
-    </div>
-    <div class="field-grid cols3">
-      <div class="field">
-        <label class="field-label" for="cfgImageUrl"><span class="status-dot dot-inline" data-state={health?.image?.state || 'unknown'}></span> Cover art endpoint</label>
-        <input class="input" id="cfgImageUrl" type="url" placeholder="—" bind:value={imageUrl} />
-      </div>
-      <div class="field">
-        <label class="field-label" for="cfgCoverModel">Cover art model</label>
-        <input class="input" id="cfgCoverModel" type="text" placeholder="—" bind:value={coverModel} />
-      </div>
-      <div class="field">
-        <label class="field-label" for="cfgImageKey">API key</label>
-        <input class="input" id="cfgImageKey" type="password" placeholder="optional" autocomplete="off" bind:value={imageKey} />
+    <div class="service-group">
+      <div class="service-group-title">Audio synthesis service</div>
+      <div class="field-grid cols3">
+        <div class="field field-endpoint">
+          <label class="field-label" for="cfgLocalai"><span class="status-dot dot-inline" data-state={health?.music?.state || 'unknown'}></span> Music endpoint</label>
+          <input class="input mono" id="cfgLocalai" type="url" placeholder="http://127.0.0.1:7777" bind:value={musicUrl} />
+          <span class="field-width-hint">Base URL (host + port)</span>
+        </div>
+        <div class="field field-model">
+          <label class="field-label" for="cfgMusicModel">Music model</label>
+          <input class="input mono" id="cfgMusicModel" type="text" placeholder="ace-step-turbo" bind:value={musicModel} />
+          <span class="field-width-hint">Model ID</span>
+        </div>
+        <div class="field field-key">
+          <label class="field-label" for="cfgMusicKey">API key</label>
+          <input class="input mono input-key" id="cfgMusicKey" type="text" placeholder="optional" autocomplete="off" bind:value={musicKey} />
+          <span class="field-width-hint">Bearer token (if required)</span>
+        </div>
       </div>
     </div>
-    <div class="field-grid cols3">
-      <div class="field">
-        <label class="field-label" for="cfgLlm"><span class="status-dot dot-inline" data-state={health?.llm?.state || 'unknown'}></span> Lyrics endpoint</label>
-        <input class="input" id="cfgLlm" type="url" placeholder="—" bind:value={llmUrl} />
+
+    <div class="service-group">
+      <div class="service-group-title">Artwork generation service</div>
+      <div class="field-grid cols3">
+        <div class="field field-endpoint">
+          <label class="field-label" for="cfgImageUrl"><span class="status-dot dot-inline" data-state={health?.image?.state || 'unknown'}></span> Cover art endpoint</label>
+          <input class="input mono" id="cfgImageUrl" type="url" placeholder="http://127.0.0.1:7777" bind:value={imageUrl} />
+          <span class="field-width-hint">Base URL (host + port)</span>
+        </div>
+        <div class="field field-model">
+          <label class="field-label" for="cfgCoverModel">Cover art model</label>
+          <input class="input mono" id="cfgCoverModel" type="text" placeholder="flux-schnell" bind:value={coverModel} />
+          <span class="field-width-hint">Model ID</span>
+        </div>
+        <div class="field field-key">
+          <label class="field-label" for="cfgImageKey">API key</label>
+          <input class="input mono input-key" id="cfgImageKey" type="text" placeholder="optional" autocomplete="off" bind:value={imageKey} />
+          <span class="field-width-hint">Bearer token (if required)</span>
+        </div>
       </div>
-      <div class="field">
-        <label class="field-label" for="cfgLlmModel">Lyrics model</label>
-        <input class="input" id="cfgLlmModel" type="text" placeholder="—" bind:value={llmModel} />
-      </div>
-      <div class="field">
-        <label class="field-label" for="cfgLlmKey">API key</label>
-        <input class="input" id="cfgLlmKey" type="password" placeholder="optional" autocomplete="off" bind:value={llmKey} />
+    </div>
+
+    <div class="service-group">
+      <div class="service-group-title">Language model service (lyrics &amp; prompt assist)</div>
+      <div class="field-grid cols3">
+        <div class="field field-endpoint">
+          <label class="field-label" for="cfgLlm"><span class="status-dot dot-inline" data-state={health?.llm?.state || 'unknown'}></span> Lyrics endpoint</label>
+          <input class="input mono" id="cfgLlm" type="url" placeholder="http://127.0.0.1:11434/v1" bind:value={llmUrl} />
+          <span class="field-width-hint">OpenAI-compatible URL</span>
+        </div>
+        <div class="field field-model">
+          <label class="field-label" for="cfgLlmModel">Lyrics model</label>
+          <input class="input mono" id="cfgLlmModel" type="text" placeholder="qwen2.5-7b-instruct" bind:value={llmModel} />
+          <span class="field-width-hint">Model ID</span>
+        </div>
+        <div class="field field-key">
+          <label class="field-label" for="cfgLlmKey">API key</label>
+          <input class="input mono input-key" id="cfgLlmKey" type="text" placeholder="optional" autocomplete="off" bind:value={llmKey} />
+          <span class="field-width-hint">Bearer token (if required)</span>
+        </div>
       </div>
     </div>
 
@@ -179,6 +199,9 @@
 
 <style>
   .settings-head-actions { display: flex; align-items: center; gap: 8px; }
-  .settings-save-btn { height: 38px; padding: 0 16px; font-size: 13px; border-radius: 10px; }
-  .field-grid.cols3 { grid-template-columns: 1.4fr 1fr 1fr; }
+  .settings-save-btn { height: 36px; padding: 0 16px; font-size: 13px; border-radius: var(--radius-sm); }
+  .field-grid.cols3 { grid-template-columns: minmax(260px, 1.85fr) minmax(130px, 0.85fr) minmax(170px, 1.2fr); }
+  @media (max-width: 820px) {
+    .field-grid.cols3 { grid-template-columns: 1fr; }
+  }
 </style>

@@ -32,7 +32,7 @@ class ExpandStyleRequest(BaseModel):
 @router.post("/api/lyrics")
 async def write_lyrics(req: LyricsRequest):
     try:
-        lyrics, _title = await llm.generate_lyrics(req.prompt, req.tags)
+        lyrics, _title, _usage = await llm.generate_lyrics(req.prompt, req.tags)
     except Exception as exc:
         raise HTTPException(502, f"LLM unavailable: {exc}") from exc
     if not lyrics:
@@ -43,7 +43,7 @@ async def write_lyrics(req: LyricsRequest):
 @router.post("/api/enhance-prompt")
 async def enhance_prompt(req: EnhancePromptRequest):
     try:
-        enhanced = await llm.enhance_description(req.prompt, req.tags)
+        enhanced, _usage = await llm.enhance_description(req.prompt, req.tags)
     except Exception as exc:
         raise HTTPException(502, f"LLM unavailable: {exc}") from exc
     if not enhanced:
@@ -53,7 +53,7 @@ async def enhance_prompt(req: EnhancePromptRequest):
 
 @router.post("/api/title")
 async def generate_title(req: TitleRequest):
-    title = await llm.generate_title(req.prompt, req.lyrics or "", tags=req.tags)
+    title, _usage = await llm.generate_title(req.prompt, req.lyrics or "", tags=req.tags)
     # generate_title swallows errors and returns None by design; the frontend
     # treats an empty title as failure, so don't 502 here.
     return {"title": title or ""}
@@ -61,7 +61,7 @@ async def generate_title(req: TitleRequest):
 
 @router.post("/api/expand-style")
 async def expand_style(req: ExpandStyleRequest):
-    style, avoid = await llm.expand_style(req.prompt, req.tags)
+    style, avoid, _usage = await llm.expand_style(req.prompt, req.tags)
     return {"style": style, "avoid": avoid}
 
 

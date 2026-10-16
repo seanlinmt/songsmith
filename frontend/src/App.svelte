@@ -9,6 +9,7 @@
   import LibraryView from './lib/LibraryView.svelte';
   import SettingsView from './lib/SettingsView.svelte';
   import SongModal from './lib/SongModal.svelte';
+  import LogPanel from './lib/LogPanel.svelte';
 
   /* ---------------- state ---------------- */
   let route = $state('create');
@@ -29,6 +30,70 @@
 
   let modalSong = $state(null);
   let modalAutoplay = $state(false);
+
+  /* ---------------- server logs panel ---------------- */
+  const LOG_TAIL_LIMIT = 500;    // first fetch: tail since boot
+  const LOG_POLL_MS = 1500;
+  const LOG_MAX_LINES = 2000;    // client-side visible buffer cap
+
+  let logsOpen = $state(false);
+  let logLines = $state([]);
+  let logCursor = $state(0);     // `since` cursor from last response
+  let logNewCount = $state(0);   // unseen lines while scrolled up
+  let logAtBottom = $state(true);// user pinned to the tail?
+  let logBuffered = $state(0);   // server-side buffer size (informational)
+  let logsTimer = null;          // plain (non-reactive) handle
+  let logsFetching = false;
+
+  function openLogs() {
+    if (logsOpen) return;
+    logsOpen = true;
+    logLines = [];
+    logCursor = 0;
+    logNewCount = 0;
+    pollLogs();
+    logsTimer = setInterval(pollLogs, LOG_POLL_MS);
+  }
+
+  function closeLogs() {
+    logsOpen = false;
+    if (logsTimer) { clearInterval(logsTimer); logsTimer = null; }
+  }
+
+  function onLogBottom(pinned) {
+    logAtBottom = pinned;
+    if (pinned) logNewCount = 0;
+  }
+
+  async function pollLogs() {
+    if (!logsOpen || logsFetching) return;
+    logsFetching = true;
+    try {
+      const data = await api.get('/api/logs?since=' + logCursor + '&limit=' + LOG_TAIL_LIMIT);
+      const fresh = Array.isArray(data && data.lines) ? data.lines : [];
+      if (fresh.length) {
+        logLines = logLines.concat(fresh).slice(-LOG_MAX_LINES);
+        if (logCursor !== 0 && !logAtBottom) logNewCount += fresh.length;
+      }
+      if (data && typeof data.next === 'number') logCursor = data.next;
+      if (data && typeof data.buffered === 'number') logBuffered = data.buffered;
+    } catch (_) { /* transient — keep polling */ }
+    logsFetching = false;
+  }
+
+  function saveLogs() {
+    const text = logLines.map((l) => `${l.ts} ${l.level} ${l.name}: ${l.msg}`).join('\n') + '\n';
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `songsmith-server-${stamp}.log`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Log saved — ' + logLines.length + ' lines');
+  }
 
   const canExtend = $derived(supportsExtend(config));
   const libraryMeta = $derived(
@@ -306,7 +371,11 @@
     boot();
     startHealthPolling();
 
-    const onKey = (e) => { if (e.key === 'Escape' && modalSong) closeModal(); };
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (modalSong) closeModal();
+      else if (logsOpen) closeLogs();
+    };
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
@@ -315,14 +384,8 @@
   });
 </script>
 
-<div class="bg-orbs" aria-hidden="true">
-  <div class="orb orb-a"></div>
-  <div class="orb orb-b"></div>
-</div>
-<div class="noise" aria-hidden="true"></div>
-
 <!-- ============ NAV ============ -->
-<Nav route={route} libraryCount={songs.length} healthState={health.nav} onRoute={handleRoute} onRefreshHealth={() => refreshHealth(true)} />
+<Nav route={route} libraryCount={songs.length} healthState={health.nav} onRoute={handleRoute} onRefreshHealth={() => refreshHealth(true)} onOpenLogs={openLogs} />
 
 <main class="shell" id="shell">
   <!-- ============ CREATE ============ -->
@@ -376,6 +439,17 @@
   onClose={closeModal}
   onPlayVariant={playVariant}
   onDeleteVariant={deleteVariant}
+/>
+
+<!-- ============ SERVER LOGS PANEL ============ -->
+<LogPanel
+  open={logsOpen}
+  lines={logLines}
+  newCount={logNewCount}
+  buffered={logBuffered}
+  onClose={closeLogs}
+  onSave={saveLogs}
+  onAtBottom={onLogBottom}
 />
 
 <!-- ============ TOASTS ============ -->

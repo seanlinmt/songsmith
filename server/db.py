@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS songs (
     style_influence REAL,
     weirdness REAL,
     variety INTEGER,
-    continue_at INTEGER
+    continue_at INTEGER,
+    tokens_used INTEGER
 );
 CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
@@ -89,6 +90,7 @@ def init_db() -> None:
         ("weirdness", "REAL"),
         ("variety", "INTEGER"),
         ("continue_at", "INTEGER"),
+        ("tokens_used", "INTEGER"),
     ):
         try:
             conn.execute(f"ALTER TABLE songs ADD COLUMN {col} {typ}")

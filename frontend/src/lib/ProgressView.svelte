@@ -54,7 +54,7 @@
 </header>
 <div class="progress-grid" id="progressGrid" data-od-id="progress-grid">
   {#each cards as c, idx (c.job && c.job.id != null ? c.job.id : 'ph-' + idx)}
-    <div class="glass card skeleton-card" data-od-id={'progress-card-' + (idx + 1)}>
+    <div class="studio-panel card skeleton-card" data-od-id={'progress-card-' + (idx + 1)}>
       <div class="skeleton-cover">
         <div class="wave-mini">
           {#each waveBars[idx] as b}
