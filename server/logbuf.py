@@ -51,3 +51,11 @@ def get_logs(since: int = Query(default=0, ge=0),
         rows = [r for r in with_buf if r["seq"] > since][:limit]
     next_seq = rows[-1]["seq"] if rows else max(since, _seq)
     return {"lines": rows, "next": next_seq, "buffered": len(with_buf)}
+
+
+@router.post("/clear")
+def clear_logs():
+    """Empty the ring buffer (used after the UI exports the log)."""
+    n = len(_buf)
+    _buf.clear()
+    return {"cleared": n, "next": _seq}

@@ -81,7 +81,8 @@
     logsFetching = false;
   }
 
-  function saveLogs() {
+  async function saveLogs() {
+    const count = logLines.length;
     const text = logLines.map((l) => `${l.ts} ${l.level} ${l.name}: ${l.msg}`).join('\n') + '\n';
     const d = new Date();
     const p = (n) => String(n).padStart(2, '0');
@@ -92,7 +93,18 @@
     a.download = `songsmith-server-${stamp}.log`;
     a.click();
     URL.revokeObjectURL(url);
-    toast('Log saved — ' + logLines.length + ' lines');
+    let next = null;
+    try {
+      const resp = await api.send('/api/logs/clear', 'POST');
+      if (resp && typeof resp.next === 'number') next = resp.next;
+    } catch (_) { /* keep local state; polling continues */ }
+    if (next !== null) {
+      logLines = [];
+      logCursor = next;
+    }
+    logNewCount = 0;
+    logBuffered = 0;
+    toast('Exported — ' + count + ' lines');
   }
 
   const canExtend = $derived(supportsExtend(config));

@@ -87,10 +87,12 @@
         {:else}
           {#each lines as l (l.seq)}
             <div class={lineClass(l)}>
-              <span class="log-ts mono">{l.ts}</span>
-              <span class="log-lv mono">{l.level}</span>
-              <span class="log-name mono">{l.name}</span>
-              <span class="log-msg">{l.msg}</span>
+              <div class="log-line-head">
+                <span class="log-ts mono">{l.ts}</span>
+                <span class="log-lv mono">{l.level}</span>
+                <span class="log-name mono">{l.name}</span>
+              </div>
+              <div class="log-msg">{l.msg}</div>
             </div>
           {/each}
         {/if}
@@ -106,7 +108,7 @@
       <span class="log-buffered mono">buffered: {buffered}</span>
       <div class="log-foot-actions">
         <button class="btn ghost" onclick={() => onClose?.()}>Cancel</button>
-        <button class="btn primary" onclick={() => onSave?.()}>Save log</button>
+        <button class="btn primary" onclick={() => onSave?.()}>Export</button>
       </div>
     </footer>
   </div>
@@ -158,22 +160,25 @@
     overscroll-behavior: contain;
   }
   .log-line {
-    display: flex;
-    gap: 8px;
-    align-items: baseline;
     padding: 1px 0;
     word-break: break-word;
   }
   .log-line:hover { background: rgba(255, 255, 255, 0.025); }
+  .log-line-head {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+  }
   .log-ts { flex: none; color: var(--text-faint); font-variant-numeric: tabular-nums; }
   .log-lv { flex: none; width: 62px; font-weight: 600; }
   .log-name { flex: none; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .log-msg { color: var(--text); min-width: 0; }
+  .log-msg { color: var(--text); min-width: 0; padding-left: 58px; }
   .lvl-err .log-lv { color: var(--err); }
   .lvl-err .log-msg { color: var(--err); }
   .lvl-warn .log-lv { color: var(--warn); }
-  .lvl-warn .log-msg { color: var(--text); }
-  .lvl-info .log-lv { color: var(--text-dim); }
+  .lvl-warn .log-msg { color: var(--warn); }
+  .lvl-info .log-lv { color: var(--text-faint); }
+  .lvl-info .log-msg { color: var(--text); }
   .lvl-info .log-name { color: var(--text-faint); }
   .lvl-debug .log-lv,
   .lvl-debug .log-msg { color: var(--text-faint); }
