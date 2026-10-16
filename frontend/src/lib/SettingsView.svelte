@@ -127,7 +127,7 @@
       <div class="service-group-title">Audio synthesis service</div>
       <div class="field-grid cols3">
         <div class="field field-endpoint">
-          <label class="field-label" for="cfgLocalai"><span class="status-dot dot-inline" data-state={health?.music?.state || 'unknown'}></span> Music endpoint</label>
+          <label class="field-label" for="cfgLocalai"><span class="status-dot dot-inline" data-state={health?.music?.state || 'unknown'}></span> Music endpoint <span class="mono dim">/v1/sound-generation</span></label>
           <input class="input mono" id="cfgLocalai" type="url" placeholder="http://127.0.0.1:7777" bind:value={musicUrl} />
           <span class="field-width-hint">Base URL (host + port)</span>
         </div>
@@ -148,7 +148,7 @@
       <div class="service-group-title">Artwork generation service</div>
       <div class="field-grid cols3">
         <div class="field field-endpoint">
-          <label class="field-label" for="cfgImageUrl"><span class="status-dot dot-inline" data-state={health?.image?.state || 'unknown'}></span> Cover art endpoint</label>
+          <label class="field-label" for="cfgImageUrl"><span class="status-dot dot-inline" data-state={health?.image?.state || 'unknown'}></span> Cover art endpoint <span class="mono dim">/v1/images/generations</span></label>
           <input class="input mono" id="cfgImageUrl" type="url" placeholder="http://127.0.0.1:7777" bind:value={imageUrl} />
           <span class="field-width-hint">Base URL (host + port)</span>
         </div>
@@ -169,7 +169,7 @@
       <div class="service-group-title">Language model service (lyrics &amp; prompt assist)</div>
       <div class="field-grid cols3">
         <div class="field field-endpoint">
-          <label class="field-label" for="cfgLlm"><span class="status-dot dot-inline" data-state={health?.llm?.state || 'unknown'}></span> Lyrics endpoint</label>
+          <label class="field-label" for="cfgLlm"><span class="status-dot dot-inline" data-state={health?.llm?.state || 'unknown'}></span> Lyrics endpoint <span class="mono dim">/v1/chat/completions</span></label>
           <input class="input mono" id="cfgLlm" type="url" placeholder="http://127.0.0.1:11434/v1" bind:value={llmUrl} />
           <span class="field-width-hint">OpenAI-compatible URL</span>
         </div>
