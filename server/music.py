@@ -190,4 +190,14 @@ async def generate(
     duration_seconds = await _probe_duration(
         config.DATA_DIR / audio_path.replace("/", "/")
     )
+    if duration_seconds is not None and abs(duration_seconds - duration) > 5:
+        log.warning(
+            "song %s: requested %ds but ACE-Step produced %ds",
+            song_id, duration, duration_seconds,
+        )
+    else:
+        log.info(
+            "song %s: duration ok (requested %ds, got %s)",
+            song_id, duration, duration_seconds,
+        )
     return {"audio_path": audio_path, "duration_seconds": duration_seconds}

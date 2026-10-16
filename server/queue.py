@@ -91,7 +91,8 @@ async def _run_generation(job: dict) -> None:
     tags = song.get("tags") or []
     if not instrumental and not lyrics:
         _update_job(job_id, progress=0.1, message="writing lyrics")
-        lyrics, llm_title, usage = await llm.generate_lyrics(prompt, tags=tags)
+        lyrics, llm_title, usage = await llm.generate_lyrics(
+            prompt, tags=tags, duration_seconds=duration)
         if usage is not None:
             tokens_used = (tokens_used or 0) + usage
         if not lyrics:

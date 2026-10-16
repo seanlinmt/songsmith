@@ -127,15 +127,17 @@ def test_create_view_controls(page):
     inst_switch.click()
     expect(inst_switch).to_have_attribute("aria-checked", "false")
 
-    # Duration slider
+    # Duration slider snaps to 15s intervals (min 15s, max 4m)
     dur_slider = page.locator("#durationSlider")
     dur_readout = page.locator("#durationReadout")
     expect(dur_readout).to_have_text("0:30")
 
-    dur_slider.fill("0")
-    expect(dur_readout).to_have_text("0:15")
-    dur_slider.fill("2")
+    dur_slider.fill("45")
+    expect(dur_readout).to_have_text("0:45")
+    dur_slider.fill("60")
     expect(dur_readout).to_have_text("1:00")
+    dur_slider.fill("240")
+    expect(dur_readout).to_have_text("4:00")
 
     # Empty prompt validation error
     prompt_input.fill("")

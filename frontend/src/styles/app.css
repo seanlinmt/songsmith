@@ -844,12 +844,19 @@ body {
   border: 3px solid var(--accent);
 }
 .range-marks {
-  display: flex;
-  justify-content: space-between;
+  position: relative;
+  height: 14px;
   font-family: var(--mono);
   font-size: 11px;
   color: var(--text-faint);
 }
+.range-marks span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.range-marks span:first-child { transform: none; }
+.range-marks span:last-child { transform: translateX(-100%); }
 
 /* Title Field */
 .title-row {

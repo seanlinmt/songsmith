@@ -56,12 +56,30 @@ async def _chat(client: httpx.AsyncClient, messages: list[dict],
     return (data["choices"][0]["message"]["content"] or "").strip(), total_tokens
 
 
-async def generate_lyrics(prompt: str, tags: list[str] | None = None) -> tuple[str, str | None, int | None]:
+def _lyrics_length_hint(duration_seconds: int) -> str:
+    """Human hint telling the LLM how many lyric lines fit the runtime.
+
+    Rule of thumb: one sung line ≈ 4-5 s of music.
+    """
+    lines = max(4, round(duration_seconds / 4.5))
+    minutes = duration_seconds / 60
+    return (
+        f"The song must run about {duration_seconds} seconds "
+        f"(~{minutes:.0f} minutes), so write roughly {lines} lyric lines "
+        "of actual sung text (section tags don't count), ending with a "
+        "repeated final chorus to fill the runtime."
+    )
+
+
+async def generate_lyrics(prompt: str, tags: list[str] | None = None,
+                          duration_seconds: int | None = None) -> tuple[str, str | None, int | None]:
     """Returns (lyrics, title, usage) — title/usage may be None if the model
     skipped the title or the API omitted usage."""
     user_content = prompt
+    if duration_seconds:
+        user_content = f"{user_content}\n\n{_lyrics_length_hint(duration_seconds)}"
     if tags:
-        user_content = f"{prompt}\n\nStyle/genre: {', '.join(tags)}"
+        user_content = f"{user_content}\n\nStyle/genre: {', '.join(tags)}"
     try:
         async with httpx.AsyncClient(headers=_llm_headers()) as client:
             content, usage = await _chat(client, [

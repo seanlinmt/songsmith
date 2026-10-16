@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from './api.js';
   import { toast } from './toast.svelte.js';
-  import { PRESETS, DURATIONS } from './songs.js';
+  import { PRESETS } from './songs.js';
   import { fmtDur } from './format.js';
 
   let { health, onStarted } = $props();
@@ -13,7 +13,7 @@
   let writing = $state(false);
   let selectedTags = $state(new Set());
   let inst = $state(false);
-  let durIdx = $state(1);
+  let duration = $state(30); // seconds, snaps to 15s intervals (15–240)
   let generating = $state(false);
 
   // feature: optional title
@@ -40,7 +40,7 @@
 
   let promptEl = $state();
 
-  const fillPct = $derived((Number(durIdx) / (DURATIONS.length - 1)) * 100);
+  const fillPct = $derived(((Number(duration) - 15) / (240 - 15)) * 100);
   const tagsKey = $derived([...selectedTags].sort().join('\u0000'));
   const styleStale = $derived(!!stylePrompt && stylePromptTagsKey !== tagsKey);
 
@@ -197,7 +197,7 @@
       lyrics: lyricsVal.trim() || null,
       tags: [...selectedTags],
       instrumental: inst,
-      duration_seconds: DURATIONS[Number(durIdx)],
+      duration_seconds: Number(duration),
       title: title.trim(),
     };
     if (stylePrompt.trim()) body.style_prompt = stylePrompt.trim();
@@ -380,12 +380,16 @@
             <svg class="ico" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
             Duration
           </label>
-          <span class="duration-readout" id="durationReadout">{fmtDur(DURATIONS[Number(durIdx)])}</span>
+          <span class="duration-readout" id="durationReadout">{fmtDur(Number(duration))}</span>
         </div>
-        <input type="range" id="durationSlider" class="range" min="0" max="4" step="1" bind:value={durIdx}
+        <input type="range" id="durationSlider" class="range" min="15" max="240" step="15" bind:value={duration}
           style="--fill: {fillPct}%" aria-labelledby="durLabel" />
         <div class="range-marks" id="rangeMarks" aria-hidden="true">
-          <span>15s</span><span>30s</span><span>1m</span><span>2m</span><span>4m</span>
+          <span style="left: 0%">15s</span>
+          <span style="left: 20%">1m</span>
+          <span style="left: 46.7%">2m</span>
+          <span style="left: 73.3%">3m</span>
+          <span style="left: 100%">4m</span>
         </div>
       </div>
     </div>
