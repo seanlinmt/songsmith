@@ -57,6 +57,13 @@
   --shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.65);
   --glow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+
+  /* artwork overlay chips (duration, inspect, cover-regen) — fixed dark, sit on
+     cover art in BOTH themes, so they must not follow --text/--border tokens */
+  --chip-bg: rgba(11, 12, 15, 0.88);
+  --chip-bg-hover: rgba(30, 33, 42, 0.95);
+  --chip-border: rgba(255, 255, 255, 0.18);
+  --chip-text: #f3f5f8;
 }
 
 [data-theme="light"] {

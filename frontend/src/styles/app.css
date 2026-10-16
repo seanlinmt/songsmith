@@ -1078,9 +1078,9 @@ body {
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 600;
-  background: rgba(11, 12, 15, 0.88);
-  border: 1px solid var(--border-strong);
-  color: var(--text);
+  background: var(--chip-bg);
+  border: 1px solid var(--chip-border);
+  color: var(--chip-text);
   padding: 3px 7px;
   border-radius: 4px;
 }
@@ -1111,9 +1111,9 @@ body {
   height: 28px;
   padding: 0 9px;
   border-radius: var(--radius-sm);
-  background: rgba(11, 12, 15, 0.88);
-  border: 1px solid var(--border-strong);
-  color: var(--text);
+  background: var(--chip-bg);
+  border: 1px solid var(--chip-border);
+  color: var(--chip-text);
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 600;
@@ -1134,11 +1134,11 @@ body {
   height: 30px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--chip-border);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  background: rgba(11, 12, 15, 0.88);
-  color: var(--text);
+  background: var(--chip-bg);
+  color: var(--chip-text);
   pointer-events: auto;
   opacity: 0;
   transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease;
@@ -1148,7 +1148,7 @@ body {
   opacity: 1;
 }
 .cover-regen:hover:not(:disabled) {
-  background: var(--surface-3);
+  background: var(--chip-bg-hover);
   border-color: var(--accent);
   color: var(--accent);
 }
