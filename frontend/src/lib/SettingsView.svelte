@@ -2,6 +2,8 @@
   let {
     config = null,
     health = null,
+    theme = 'system',
+    onSetTheme,
     onRefreshSettings,
     onRefreshHealth,
     onSaveSettings,
@@ -109,6 +111,33 @@
 </header>
 
 <div class="settings-grid">
+  <div class="studio-panel card settings-card appearance-card" data-od-id="settings-appearance">
+    <div class="settings-card-head">
+      <h3>Appearance</h3>
+    </div>
+    <div class="field">
+      <span class="field-label" id="themeSegLabel">Theme</span>
+      <div class="seg" role="radiogroup" aria-labelledby="themeSegLabel" data-od-id="theme-seg">
+        <label class="seg-opt" class:active={theme === 'light'}>
+          <input type="radio" name="ss-theme" value="light" checked={theme === 'light'} onchange={() => onSetTheme?.('light')} />
+          <svg class="ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5v2m0 15v2M4.8 4.8l1.4 1.4m11.6 11.6 1.4 1.4M2.5 12h2m15 0h2M4.8 19.2l1.4-1.4M17.8 6.2l1.4-1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Light
+        </label>
+        <label class="seg-opt" class:active={theme === 'dark'}>
+          <input type="radio" name="ss-theme" value="dark" checked={theme === 'dark'} onchange={() => onSetTheme?.('dark')} />
+          <svg class="ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          Dark
+        </label>
+        <label class="seg-opt" class:active={theme === 'system'}>
+          <input type="radio" name="ss-theme" value="system" checked={theme === 'system'} onchange={() => onSetTheme?.('system')} />
+          <svg class="ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8.5 20h7M12 16v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          System
+        </label>
+      </div>
+      <span class="field-width-hint">System follows your OS light/dark preference and updates live.</span>
+    </div>
+  </div>
+
   <div class="studio-panel card settings-card" data-od-id="settings-endpoints">
     <div class="settings-card-head">
       <h3>Endpoints &amp; models</h3>
@@ -203,5 +232,49 @@
   .field-grid.cols3 { grid-template-columns: minmax(260px, 1.85fr) minmax(130px, 0.85fr) minmax(170px, 1.2fr); }
   @media (max-width: 820px) {
     .field-grid.cols3 { grid-template-columns: 1fr; }
+  }
+
+  .appearance-card .field { display: flex; flex-direction: column; gap: 8px; }
+
+  /* segmented 3-way theme switch — hardware toggle feel */
+  .seg {
+    display: inline-flex;
+    align-self: flex-start;
+    gap: 2px;
+    padding: 3px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .seg-opt {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 14px;
+    border-radius: var(--radius-sm);
+    font: 600 12.5px/1 var(--font);
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .seg-opt:hover { color: var(--text); background: var(--surface-2); }
+  .seg-opt.active {
+    background: var(--surface-3);
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
+  }
+  .seg-opt input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+  .seg-opt:has(input:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 </style>

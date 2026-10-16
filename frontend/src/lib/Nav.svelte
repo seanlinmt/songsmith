@@ -1,5 +1,5 @@
 <script>
-  let { route = 'create', libraryCount = 0, healthState = 'unknown', onRoute, onRefreshHealth, onOpenLogs } = $props();
+  let { route = 'create', libraryCount = 0, healthState = 'unknown', onRoute, onOpenLogs } = $props();
 </script>
 
 <nav class="topnav" data-od-id="topnav" aria-label="Main">
@@ -32,12 +32,8 @@
       <span class="status-dot dot-inline" data-state={healthState} title="API health"></span>
     </button>
   </div>
-  <button class="ghost-btn" title="Check API health" onclick={() => onRefreshHealth()}>
-    <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <span>Check health</span>
-  </button>
   <button class="ghost-btn" title="Server logs" aria-label="Server logs" onclick={() => onOpenLogs?.()}>
-    <svg class="ico" viewBox="0 0 24 24" fill="none">
+    <svg class="ico" viewBox="0 0 24 24" fill="none" style="color: var(--err)">
       <rect x="8" y="7" width="8" height="13" rx="4" stroke="currentColor" stroke-width="1.8"/>
       <path d="M12 7V4.5M9.2 5.2 8 3.6m6.8 1.6L16 3.6M8 10.5H4.5m15 0H16M8 15H4.5m15 0H16M8.4 18.8l-1.9 1.4m9.1-1.4 1.9 1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
     </svg>

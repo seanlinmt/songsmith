@@ -31,6 +31,39 @@
   let modalSong = $state(null);
   let modalAutoplay = $state(false);
 
+  /* ---------------- theme ---------------- */
+  const THEME_KEY = 'ss_theme';
+  const THEME_BG = { light: '#f4f5f7', dark: '#0b0c0f' };
+
+  function osPrefersLight() {
+    return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: light)').matches;
+  }
+
+  function applyTheme(pref) {
+    const light = pref === 'light' || (pref === 'system' && osPrefersLight());
+    const root = document.documentElement;
+    if (light) root.setAttribute('data-theme', 'light');
+    else root.removeAttribute('data-theme');
+    root.style.background = light ? THEME_BG.light : THEME_BG.dark;
+  }
+
+  function loadThemePref() {
+    try {
+      const t = localStorage.getItem(THEME_KEY);
+      return ['light', 'dark', 'system'].includes(t) ? t : 'system';
+    } catch (_) { return 'system'; }
+  }
+
+  const initialThemePref = loadThemePref();
+  let themePref = $state(initialThemePref);
+  applyTheme(initialThemePref);
+
+  function setTheme(pref) {
+    themePref = pref;
+    applyTheme(pref);
+    try { localStorage.setItem(THEME_KEY, pref); } catch (_) {}
+  }
+
   /* ---------------- server logs panel ---------------- */
   const LOG_TAIL_LIMIT = 500;    // first fetch: tail since boot
   const LOG_POLL_MS = 1500;
@@ -383,6 +416,11 @@
     boot();
     startHealthPolling();
 
+    // track OS light/dark live while the app is open (System mode)
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const onOsTheme = () => { if (themePref === 'system') applyTheme('system'); };
+    mq.addEventListener('change', onOsTheme);
+
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
       if (modalSong) closeModal();
@@ -391,13 +429,14 @@
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
+      mq.removeEventListener('change', onOsTheme);
       stopHealthPolling();
     };
   });
 </script>
 
 <!-- ============ NAV ============ -->
-<Nav route={route} libraryCount={songs.length} healthState={health.nav} onRoute={handleRoute} onRefreshHealth={() => refreshHealth(true)} onOpenLogs={openLogs} />
+<Nav route={route} libraryCount={songs.length} healthState={health.nav} onRoute={handleRoute} onOpenLogs={openLogs} />
 
 <main class="shell" id="shell">
   <!-- ============ CREATE ============ -->
@@ -432,6 +471,8 @@
     <SettingsView
       config={config}
       health={health}
+      theme={themePref}
+      onSetTheme={setTheme}
       onRefreshSettings={refreshSettings}
       onRefreshHealth={() => refreshHealth(true)}
       onSaveSettings={saveSettings}
