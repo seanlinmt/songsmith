@@ -107,6 +107,14 @@
     document.body.style.overflow = song ? 'hidden' : '';
   });
 
+  /* stop playback when the modal closes */
+  $effect(() => {
+    if (!song && audioEl) {
+      audioEl.pause();
+      setPlayIcon(false);
+    }
+  });
+
   /* sync the editable prompt draft whenever a song is opened */
   $effect(() => {
     const s = song;

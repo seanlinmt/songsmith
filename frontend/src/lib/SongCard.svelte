@@ -103,13 +103,11 @@
         <span>Extend</span>
       </button>
     {/if}
-    <a class="song-action" data-act="dl" data-id={song.id} href={audioUrl} download title="Download">
+    <a class="song-action" data-act="dl" data-id={song.id} href={audioUrl} download title="Save" aria-label={'Save ' + (song.title || 'song')}>
       <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 19h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>Save</span>
     </a>
-    <button class="song-action danger" data-act="del" data-id={song.id} title="Delete" disabled={busy === 'del'}>
+    <button class="song-action danger" data-act="del" data-id={song.id} title="Delete" aria-label={'Delete ' + (song.title || 'song')} disabled={busy === 'del'}>
       <svg class="ico" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2m-8 0 .7 12a1.5 1.5 0 0 0 1.5 1.4h3.6a1.5 1.5 0 0 0 1.5-1.4L17 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>Delete</span>
     </button>
   </div>
 </div>

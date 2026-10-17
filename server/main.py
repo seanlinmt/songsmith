@@ -10,6 +10,9 @@ from . import config, db, logbuf, queue
 from .routes import health, jobs, settings, songs, styles
 
 logging.basicConfig(level=logging.INFO)
+# Health-poll and log-poll spam isn't useful in the UI log panel.
+for _noisy in ("uvicorn.access", "httpx", "httpcore"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 logbuf.install()
 
 

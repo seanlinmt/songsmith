@@ -199,9 +199,71 @@ network, port 6767→8080, all state in anonymous volumes (`/models`, `/backends
 - Caveat: model is Llama-3.1-based; if load ever OOMs on 16GB, pin a context size in the
   YAML (default-ctx KV cache is the suspect, not weights: Q8_0 is 8.5 GB).
 
+### glm-5.3-flash-exl3 "stale config revision" + `api_key_env unset` (fixed 2026-10-16)
+- Symptom in chat UI: `failed to route model with internal loader: … stale model config
+  revision (request carries 9bfba…, controller holds e4ec6…)`. First fix is the standing
+  rule above: `docker restart localai-manager`.
+- After the manager restart the error became `localai-proxy: api_key_env "LLM_API_KEY" is
+  unset` on cold load — the model YAML is a `localai-proxy` passthrough to the tensorfold
+  EXL3 server (`192.168.20.63:8888`, `upstream_model: GLM-5.3-Flash-EXL3`) and requires
+  `LLM_API_KEY` in the env of whichever node loads it (it landed on `amd`, whose worker
+  container predated the proxy config and had no `LLM_API_KEY`).
+- Fix: recreated the `amd` worker container (`local-ai` on 192.168.20.16) with the same
+  run config plus `-e LLM_API_KEY=sk-spark-…` (same key songsmith stores in
+  `data/settings.json` as `llm_api_key` — the upstream 401s without it). Old container
+  kept as `local-ai-prev-key`. Gotcha: the `/configuration` mount is a bind of a volume
+  subdir with `rslave`; `-v <vol>:/configuration:rslave` fails, must bind
+  `/var/lib/docker/volumes/<id>/_data:/configuration:rslave` explicitly.
+- Verified: `POST /v1/chat/completions` model `glm-5.3-flash-exl3` returns completions
+  through the manager (reasoning-style output; `max_tokens` counts reasoning too).
+- HTTPS for the manager UI/API: the manager (0.0.0.0:6767) is plain HTTP only —
+  `https://takahe:6767` fails with `tlsv1 alert protocol version`. Added nginx vhost
+  `localai-manager` listening **7779 ssl** (same LE cert as `localai`) proxying to
+  `127.0.0.1:6767`. Use `https://takahe.clearpixels.org:7779/app/chat`. Note :7778
+  TLS-proxies the *standalone* `local-ai` on 127.0.0.1:7777, which does not serve
+  glm-5.3-flash-exl3.
+
 ### P2P Federation (verified 2026-10-15; superseded 2026-10-16 by topology above)
 - Mac (`127.0.0.1:7777`) and takahe (`takahe:6767`) are linked via LocalAI P2P & Federated mode (`--p2p --federated`) using a shared EdgeVPN token.
 - Mac config: `~/.localai/launcher.json` (environment variables `LOCALAI_P2P`, `LOCALAI_FEDERATED`, `LOCALAI_P2P_TOKEN`) and `~/.localai/configuration/runtime_settings.json`.
 - Takahe config: Container runs with `--net host` and `LOCALAI_ADDRESS=0.0.0.0:6767`, with UFW `6767/tcp` allowed on the host.
 - Verified: Both nodes discover each other over mDNS/DHT and appear in `/api/p2p` under `federated_nodes`.
+
+### acestep-xl — ACE-Step v1.5 XL Turbo on takahe (installed 2026-10-17; working)
+- Goal: better string instruments than the 2B turbo. Installed `ACE-Step/acestep-v15-xl-turbo`
+  (4B DiT, 8-step distilled, ~19 GB bf16, no upstream gallery entry — see upstream issue #12721).
+- Working config: `/models/acestep-xl.yaml` on takahe (both `localai-server` and `local-ai`
+  share the `/mnt/xfs2/localai/models` mount): `backend: ace-step`,
+  `parameters.model: acestep-v15-xl-turbo`, `offload_to_cpu: true`, `inference_steps: 8`,
+  `lm_model_path: acestep-5Hz-lm-0.6B`. Repo copy: `gallery/ace-step-xl-turbo.yaml` on branch
+  `gallery/ace-step-xl-turbo` (needs rename to `acestep-xl.yaml` to match the live name).
+- Weight layout on the worker (critical — the stager and backend.py disagree on paths):
+  - `/models/acestep-xl/checkpoints/acestep-xl/` — what backend.py's `LoadModel` reads
+    (`checkpoint_dir = <ModelPath>/checkpoints/<config_path>`).
+  - `/models/acestep-v15-xl-turbo/` — hardlinks to the same files; what the distributed
+    file stager uploads (`staging /models/<parameters.model>`). A **symlink here breaks
+    staging** with `read ...: is a directory`; real dir + hardlinks works (same xfs2 fs).
+- Scheduling: rows in `model_scheduling_configs` (`{"gpu.vendor":"nvidia"}`) for
+  `acestep-xl`, `ace-step-xl-turbo`, AND `ace-step-turbo`. `tiny` is an Apple-Silicon
+  node (metal, 8 GB) that can never install `cuda13-ace-step` — without a pin, the
+  idle-first cold scheduler picks it and every load dies with
+  `no backend found with name "cuda13-ace-step"`.
+- Gotchas hit along the way:
+  - `POST /models/apply` with `config_url` alone failed (`unsupported protocol scheme`);
+    the `url` + `name` + `overrides` form worked but wrote a **stripped 3-line yaml**
+    (options/parameters dropped) — write the full yaml into the models dir instead.
+  - Worker readiness probe is a hardcoded 30 s (`readinessTimeout` in
+    `core/services/worker/supervisor.go`, no env knob). `import backend` alone takes
+    ~22 s warm; cold page cache ⇒ readiness race lost. If a load fails with
+    `did not become ready within 30s`, retry while the page cache is hot.
+  - Watchdog (`runtime_settings.json`: `watchdog_idle_timeout: 15m`) kills idle
+    backends, so the first request after 15 idle minutes pays the cold load again.
+  - A stuck `unloading` replica row in `node_models` (cleanup_error: address mismatch,
+    71 retries) blocked the family — deleted the row to clear it.
+- Verified live: warm `POST /v1/sound-generation` model `acestep-xl` → 10 s audio in
+  **5.9 s** (24-bit 48 kHz FLAC); first-load 8 s audio in ~30 s. Strings quality
+  noticeably better than 2B turbo (subjective, user to confirm).
+- Original 2B `ace-step-turbo` on takahe still broken cold (its yaml pins concrete
+  `backend: cuda13-ace-step`; needs the same scheduling pin — added — plus the backend
+  image resolving again). `acestep-cpp-turbo` unaffected (different backend family).
 
