@@ -11,7 +11,7 @@
       if (!activeGroup) return [];
     }
     return list.map((job, idx) => {
-      const done = job && (String(job.status || '').toLowerCase() === 'complete' || String(job.status || '').toLowerCase() === 'completed');
+      const done = job && DONE_STATUSES.includes(String(job.status || '').toLowerCase());
       const failed = job && ['failed', 'error', 'cancelled'].includes(String(job.status || '').toLowerCase());
       const stageIdx = clamp(stageFromJob(job), 0, STAGES.length - 1);
       let statusLabel, subLabel, pct;

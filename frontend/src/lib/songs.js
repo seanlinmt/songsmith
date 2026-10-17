@@ -15,13 +15,24 @@ export const STAGES = [
   { key: "generating cover art", label: "Painting cover art" },
 ];
 
-export const JOB_STAGES = ["queued", "writing_lyrics", "naming_song", "generating_music", "generating_cover", "complete"];
+export const DONE_STATUSES = ["done", "complete", "completed"];
 
 export function stageFromJob(job) {
-  const s = String((job && (job.stage || job.status)) || "queued").toLowerCase().replace(/[\s-]+/g, "_");
-  const i = JOB_STAGES.indexOf(s);
-  if (i < 0) return 1;
-  return i;
+  if (!job) return 0;
+  // Server reports the live stage via job.message (e.g. "naming song"),
+  // which matches the STAGES keys exactly.
+  const msg = String(job.message || "").toLowerCase().replace(/[\s-]+/g, " ").trim();
+  if (msg) {
+    const i = STAGES.findIndex((s) => s.key === msg);
+    if (i >= 0) return i;
+  }
+  // Fall back to pipeline progress fractions (0.1 lyrics, 0.2 naming,
+  // 0.25 style, 0.3 music, 0.8 cover).
+  const p = Number(job.progress) || 0;
+  if (p >= 0.8) return 3;
+  if (p >= 0.3) return 2;
+  if (p >= 0.2) return 1;
+  return 0;
 }
 
 export function songCoverUrl(s) {

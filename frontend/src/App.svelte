@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from './lib/api.js';
   import { toast, toasts } from './lib/toast.svelte.js';
-  import { supportsExtend } from './lib/songs.js';
+  import { supportsExtend, DONE_STATUSES } from './lib/songs.js';
   import Nav from './lib/Nav.svelte';
   import CreateView from './lib/CreateView.svelte';
   import ProgressView from './lib/ProgressView.svelte';
@@ -187,7 +187,7 @@
       const data = await api.get('/api/jobs?group=' + encodeURIComponent(gid));
       const rows = Array.isArray(data) ? data : (data && (data.jobs || data.songs || data.items)) || [];
       activeJobs = rows;
-      const allDone = rows.length > 0 && rows.every((j) => ['complete', 'completed', 'failed', 'error', 'cancelled'].includes(String(j.status || '').toLowerCase()));
+      const allDone = rows.length > 0 && rows.every((j) => [...DONE_STATUSES, 'failed', 'error', 'cancelled'].includes(String(j.status || '').toLowerCase()));
       if (allDone) {
         activeGroup = null;
         activeJobs = [];
