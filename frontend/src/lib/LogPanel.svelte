@@ -67,11 +67,18 @@
   const reducedMotion =
     typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const slideDur = reducedMotion ? 0 : 240;
+
+  // Fly distance must equal the panel's real width (min(480px, 92vw)) so the
+  // slide stays in lockstep with .app-frame's margin push of --log-panel-w.
+  function panelX() {
+    if (typeof window === 'undefined') return 480;
+    return Math.min(480, window.innerWidth * 0.92);
+  }
 </script>
 
 {#if open}
   <div class="log-panel" role="dialog" aria-label="Server logs" aria-modal="false"
-    transition:fly={{ x: 480, duration: slideDur, easing: cubicOut }}>
+    transition:fly={{ x: panelX(), duration: slideDur, easing: cubicOut }}>
     <header class="log-head">
       <div class="log-head-titles">
         <h2 class="log-title">Server logs</h2>
@@ -107,7 +114,7 @@
     <footer class="log-foot">
       <span class="log-buffered mono">buffered: {buffered}</span>
       <div class="log-foot-actions">
-        <button class="btn ghost" onclick={() => onClose?.()}>Cancel</button>
+        <button class="btn ghost" onclick={() => onClose?.()}>Close</button>
         <button class="btn primary" onclick={() => onSave?.()}>Export</button>
       </div>
     </footer>
@@ -120,7 +127,7 @@
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(480px, 92vw);
+    width: var(--log-panel-w); /* shared token — .app-frame pushes by this same width */
     z-index: 60; /* above topnav (40), below song modal (100) */
     display: flex;
     flex-direction: column;

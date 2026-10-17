@@ -48,6 +48,7 @@
   --mono: "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace, Menlo, monospace;
 
   /* studio geometry */
+  --log-panel-w: min(480px, 92vw);
   --radius-sm: 6px;
   --radius: 8px;
   --radius-lg: 12px;

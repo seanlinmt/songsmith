@@ -435,10 +435,12 @@
   });
 </script>
 
-<!-- ============ NAV ============ -->
-<Nav route={route} libraryCount={songs.length} healthState={health.nav} onRoute={handleRoute} onOpenLogs={openLogs} />
+<!-- ============ APP FRAME (nav + shell push left when log panel opens) ============ -->
+<div class="app-frame" class:pushed={logsOpen}>
+  <!-- ============ NAV ============ -->
+  <Nav route={route} libraryCount={songs.length} healthState={health.nav} onRoute={handleRoute} onOpenLogs={openLogs} />
 
-<main class="shell" id="shell">
+  <main class="shell" id="shell">
   <!-- ============ CREATE ============ -->
   <section class="view" id="viewCreate" data-view="create" hidden={route !== 'create'}>
     <CreateView health={health} onStarted={onStarted} />
@@ -479,6 +481,7 @@
     />
   </section>
 </main>
+</div>
 
 <!-- ============ SONG DETAIL MODAL ============ -->
 <SongModal
