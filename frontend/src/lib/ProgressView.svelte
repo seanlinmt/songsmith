@@ -1,5 +1,5 @@
 <script>
-  import { STAGES, stageFromJob } from './songs.js';
+  import { STAGES, stageFromJob, DONE_STATUSES } from './songs.js';
   import { clamp } from './format.js';
 
   let { jobs = [], activeGroup = null, onAbandon } = $props();
