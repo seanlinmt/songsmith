@@ -7,9 +7,12 @@
     lines = [],
     newCount = 0,
     buffered = 0,
+    minLevel = 'DEBUG',
+    levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR'],
     onClose,
     onSave,
     onAtBottom,
+    onMinLevel,
   } = $props();
 
   /* ---------------- scroll behaviour ---------------- */
@@ -114,6 +117,19 @@
     <footer class="log-foot">
       <span class="log-buffered mono">buffered: {buffered}</span>
       <div class="log-foot-actions">
+        <label class="log-level">
+          <span class="mono">level</span>
+          <select
+            class="log-level-select"
+            value={minLevel}
+            onchange={(e) => onMinLevel?.(e.currentTarget.value)}
+            aria-label="Minimum log level"
+          >
+            {#each levels as lv}
+              <option value={lv}>{lv}</option>
+            {/each}
+          </select>
+        </label>
         <button class="btn ghost" onclick={() => onClose?.()}>Close</button>
         <button class="btn primary" onclick={() => onSave?.()}>Export</button>
       </div>
@@ -227,6 +243,23 @@
     border-top: 1px solid var(--border);
   }
   .log-buffered { font-size: 11px; color: var(--text-faint); }
-  .log-foot-actions { display: flex; gap: 8px; }
+  .log-level {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+  .log-level-select {
+    height: 28px;
+    padding: 0 6px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    color: var(--text);
+    font: 500 11.5px/1 var(--mono);
+    cursor: pointer;
+  }
+  .log-foot-actions { display: flex; gap: 8px; align-items: center; }
   .log-foot-actions .btn { height: 34px; padding: 0 14px; font-size: 12.5px; }
 </style>

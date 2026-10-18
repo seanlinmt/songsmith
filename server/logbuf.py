@@ -42,9 +42,18 @@ def install() -> None:
 
 @router.get("")
 def get_logs(since: int = Query(default=0, ge=0),
-             limit: int = Query(default=1000, ge=1, le=MAX_LINES)):
-    """Lines after `since` cursor; since=0 returns the tail (last `limit`)."""
+             limit: int = Query(default=1000, ge=1, le=MAX_LINES),
+             min_level: str = Query(default="DEBUG")):
+    """Lines after `since` cursor; since=0 returns the tail (last `limit`).
+
+    min_level filters by severity: DEBUG < INFO < WARNING < ERROR < CRITICAL.
+    """
+    order = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}
+    threshold = order.get(str(min_level).upper(), 10)
     with_buf = list(_buf)
+    if threshold > 10:
+        with_buf = [r for r in with_buf
+                    if order.get(str(r.get("level", "")).upper(), 10) >= threshold]
     if since <= 0:
         rows = with_buf[-limit:]
     else:

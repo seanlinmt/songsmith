@@ -1,0 +1,18 @@
+backend: ace-step
+known_usecases:
+    - sound_generation
+name: acestep-xl
+options:
+    - device:auto
+    - use_flash_attention:true
+    - offload_to_cpu:true
+    - offload_dit_to_cpu:false
+    - init_lm:true
+    - lm_model_path:acestep-5Hz-lm-0.6B
+    - lm_backend:pt
+    - temperature:0.85
+    - top_p:0.9
+    - inference_steps:8
+    - batch_size:1
+parameters:
+    model: acestep-v15-xl-turbo
