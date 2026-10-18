@@ -291,3 +291,24 @@ network, port 6767→8080, all state in anonymous volumes (`/models`, `/backends
   `docker inspect` `HostConfig.DeviceRequests` (or pass `--gpus all`) — `nvidia-smi`
   works on the host but the container silently falls back to CPU without it.
 
+### shift=3.0 for turbo checkpoints (fixed 2026-10-19) — likely the "synthetic strings" culprit
+- Per upstream issue #1114 (root-caused Aug 2026): `shift` is **per-checkpoint** —
+  turbo variants require `shift=3.0`, base/sft require `shift=1.0`. A wrong `shift`
+  produces **pitched-instrument timbre drift and segmented phrasing** — i.e. exactly
+  "cello that doesn't sound like a cello". `guidance_scale` is auto-corrected for
+  turbo (7.0 → 1.0, seen in logs), but `shift` is **not** auto-corrected on this path.
+- LocalAI's `backend.py` reads `shift` from `payload.get("shift", 1.0)` (line 238) —
+  the hardcoded default 1.0 was silently wrong for turbo. Verified via
+  `_generate_audio_sync`: LoadModel options DO merge into the payload
+  (`for key, value in opts.items(): if key not in payload`) — so a yaml option works.
+- Fix: added `- shift:3.0` to both `/models/acestep-xl.yaml` and
+  `/models/ace-step-xl-turbo.yaml` on takahe (backend restarted; LoadModel log now
+  includes `shift` in options). Repo copy updated too.
+- Also relevant: the 0.6B LM CoT phase runs per generation; prompts naming the
+  instrument in the caption AND `[section - instrument]` lyric tags are the
+  officially documented way to steer timbre. VAE tiled-decode chunk_size 128 with
+  reduced overlap 32 (seen in logs) is known-upstream (ComfyUI #12253 raised 128→256);
+  worth trying chunk 256+ if boundary artifacts appear. The ScragVAE decoder swap
+  (ACESTEP_VAE_CHECKPOINT=scragvae, upstream v0.1.7+) addresses HF attenuation
+  directly but is unverified through LocalAI's backend.
+

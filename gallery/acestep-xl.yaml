@@ -14,5 +14,6 @@ options:
     - top_p:0.9
     - inference_steps:8
     - batch_size:1
+    - shift:3.0
 parameters:
     model: acestep-v15-xl-turbo
