@@ -4,10 +4,12 @@ Songsmith is a local-first, Suno-style AI music generation studio and web UI. It
 
 ![Songsmith Creation Interface](docs/screenshots/create.png)
 
+![Songsmith Library](docs/screenshots/library.png)
+
 ### Sample Output
 
-<audio controls src="docs/samples/black-dress-dreams.mp3"></audio>
-
+- [Listen: Rise of the Cellos (MP3)](docs/samples/rise-of-the-cellos.mp3)
+- [Listen: Built in the Bruise (MP3)](docs/samples/built-in-the-bruise.mp3)
 - [Listen: Black Dress Dreams (MP3)](docs/samples/black-dress-dreams.mp3)
 
 ---
@@ -88,3 +90,10 @@ Process bootstrap overrides (`HOST`, `PORT`, `DATA_DIR`) can be set in `.env` or
 | `GET` | `/api/config` | View active configuration |
 | `PATCH` | `/api/config` | Update service endpoints and models |
 | `GET` | `/api/health` | Backend connectivity and system health checks |
+
+---
+
+## TODO
+
+- [ ] Extend still does not work correctly
+- [ ] Strings still do not sound like strings
